@@ -70,7 +70,7 @@ def write_schema(save_path, keyspace = None):
 
 def run_snapshot(title, host='localhost', keyspace=None, table=None):
 
-    cmd = 'nodetool -h %(host)s snapshot -t %(title)s ' % 
+    cmd = 'nodetool -h %(host)s snapshot -t %(title)s ' % \
           dict(host=host, title=title)
     if keyspace:
 
