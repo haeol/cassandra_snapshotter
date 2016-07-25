@@ -30,6 +30,10 @@ def parse_cmd():
                         required=False,
                         help='Enter title/name for snapshot'
     )
+    parser.add_argument('-n', '--node', '-h', '--host',
+                        required=False,
+                        help='Enter the host ip'
+    )
     return parser.parse_args()
 
 
@@ -64,8 +68,18 @@ def write_schema(save_path, keyspace = None):
     return (save_path + filename)
 
 
-def run_snapshot(title, keyspace=None, table=None):
+def run_snapshot(title, host='localhost', keyspace=None, table=None):
 
+    cmd = 'nodetool -h %(host)s snapshot -t %(title)s ' % 
+          dict(host=host, title=title)
+    if keyspace:
+
+        if table:
+            cmd = '%(cmd)s -cf %(table)s ' % dict(cmd=cmd, table=table)
+        cmd = cmd + keyspace
+
+    subprocess.call(cmd.split())
+    '''
     if keyspace:
         if table:
             subprocess.call(['nodetool', 'snapshot', '-t', title, \
@@ -74,9 +88,12 @@ def run_snapshot(title, keyspace=None, table=None):
             subprocess.call(['nodetool', 'snapshot', '-t', title, keyspace])
     else:
         subprocess.call(['nodetool', 'snapshot', '-t', title])
+    '''
 
 
-def snapshot(save_path, title_arg=None, keyspace_arg=None, table_arg=None):
+
+def snapshot(save_path, host='localhost', title_arg=None, keyspace_arg=None,
+             table_arg=None):
 
     # clear snapshot in default snapshot directory TODO: host and port option
     print('Clearing previous cassandra data snapshots . . .')
@@ -133,11 +150,11 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None, table_arg=None):
         if table_arg:
             ks = next(iter(keyspaces))
             for table in tables:
-                run_snapshot(title, ks, table)
+                run_snapshot(title, host, ks, table)
         else:
-            run_snapshot(title, ' '.join(keyspaces))
+            run_snapshot(title, host, ' '.join(keyspaces))
     else:
-        run_snapshot(title)
+        run_snapshot(title, host)
 
     cassandra_data_dir = get_data_dir()
     for ks in keyspaces:
