@@ -3,7 +3,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='sgi_cassandra_snapshotter',
+    name='cassandra_snapshotter',
     version='0.0.1',
-    install_requires=['pyyaml']
+    install_requires=['pyyaml'],
+    find_packages=find_packages()
 )

@@ -5,6 +5,15 @@ Cassandra does not provide an easy way to snapshot files and store these snapsho
 (TODO)
 Has only been tested on CentOs 7.2, is unlikely to be compatible with any other operating systems
 
+```bash
+sudo python setup.py install
+```
+or
+```bash
+sudo yum install PyYaml
+```
+
+
 ## Usage
 snapshotter
 ``` bash
