@@ -5,7 +5,7 @@ import shutil
 import datetime
 import time
 
-from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure \
+from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
                             cassandra_query)
 
 def parse_cmd():
@@ -49,7 +49,7 @@ def check_dir(folder):
         raise argparse.ArgumentTypeError('Directory is not readable')
 
 
-def write_schema(save_path, keyspace = None):
+def write_schema(save_path, host, keyspace = None):
 
     if keyspace:
         save_path = save_path + '/' + keyspace + '/'
@@ -62,17 +62,16 @@ def write_schema(save_path, keyspace = None):
 
     with open(save_path + '/' + filename, 'w') as f:
         query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
-        cqlsh = subprocess.Popen(('/bin/cqlsh'), stdin=query_process.stdout,
+        cqlsh = subprocess.Popen(('/bin/cqlsh', host), stdin=query_process.stdout,
                                                  stdout=f)
         query_process.stdout.close()
 
     return (save_path + filename)
 
 
-def run_snapshot(title, host='localhost', keyspace=None, table=None):
+def run_snapshot(title, keyspace=None, table=None):
 
-    cmd = 'nodetool -h %(host)s snapshot -t %(title)s ' % \
-          dict(host=host, title=title)
+    cmd = 'nodetool -h localhost snapshot -t %s ' % title
     if keyspace:
 
         if table:
@@ -95,12 +94,12 @@ def run_snapshot(title, host='localhost', keyspace=None, table=None):
 
 def snapshot(save_path, host='localhost', title_arg=None, keyspace_arg=None,
              table_arg=None):
-
+    # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory TODO: host and port option
     print('Clearing previous cassandra data snapshots . . .')
     try:
-        subprocess.check_output(['nodetool', 'status'])
-        subprocess.call(['nodetool', 'clearsnapshot'])
+        subprocess.check_output(['nodetool', '-h', 'localhost', 'status'])
+        subprocess.call(['nodetool', '-h', 'localhost', 'clearsnapshot'])
     except:
         raise Exception('Cassandra has not yet started')
 
@@ -151,11 +150,11 @@ def snapshot(save_path, host='localhost', title_arg=None, keyspace_arg=None,
         if table_arg:
             ks = next(iter(keyspaces))
             for table in tables:
-                run_snapshot(title, host, ks, table)
+                run_snapshot(title, ks, table)
         else:
-            run_snapshot(title, host, ' '.join(keyspaces))
+            run_snapshot(title, ' '.join(keyspaces))
     else:
-        run_snapshot(title, host)
+        run_snapshot(title)
 
     cassandra_data_dir = get_data_dir()
     for ks in keyspaces:
@@ -175,11 +174,12 @@ def snapshot(save_path, host='localhost', title_arg=None, keyspace_arg=None,
             shutil.copytree(load_dir, save_table_path)
 
     print('Saving schema . . .')
-    print_save_path = write_schema(save_path)
+    print_save_path = write_schema(save_path, host)
     print('Saved schema as %s' % print_save_path)
     for ks in keyspaces:
-        print_save_path = write_schema(save_path, ks)
+        print_save_path = write_schema(save_path, host, ks)
         print('Saved keyspace schema as %s' % print_save_path)
+        pass
 
     print('\nProcess complete. Snapshot stored in %s\n\n' % save_path)
 
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     else:
         save_path = cmds.path + '/'
 
-    cassandra_query.host = cmds.node
+    cassandra_query.host = cmds.node or 'localhost'
 
     start = time.time()    
     snapshot(save_path, cmds.node, cmds.title, cmds.keyspace, cmds.table)
