@@ -5,7 +5,8 @@ import shutil
 import datetime
 import time
 
-from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure)
+from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure
+                            cassandra_query)
 
 def parse_cmd():
 
