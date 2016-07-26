@@ -26,11 +26,11 @@ def parse_cmd():
                         nargs='+',
                         help='Enter table(s) corresponding to a single keyspace'
     )
-    parser.add_argument('-t', '--title', '--tag', '-n', '--name',
+    parser.add_argument('-t', '--title', '--tag', '--name',
                         required=False,
                         help='Enter title/name for snapshot'
     )
-    parser.add_argument('-n', '--node', '-h', '--host',
+    parser.add_argument('-n', '--node', '--host',
                         required=False,
                         help='Enter the host ip'
     )
@@ -191,8 +191,10 @@ if __name__ == '__main__':
     else:
         save_path = cmds.path + '/'
 
+    cassandra_query.host = cmds.node
+
     start = time.time()    
-    snapshot(save_path, cmds.title, cmds.keyspace, cmds.table)
+    snapshot(save_path, cmds.node, cmds.title, cmds.keyspace, cmds.table)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))

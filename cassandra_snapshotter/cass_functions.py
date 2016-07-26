@@ -3,6 +3,7 @@ import os
 import subprocess
 
 def cassandra_query(query, output=True):
+    cassandra_query.host = 'localhost' # static variable
 
     if type(query) is str:
         query = ['echo', query]
@@ -10,7 +11,7 @@ def cassandra_query(query, output=True):
         raise Exception('Query not recognized')
 
     query_process = subprocess.Popen(query, stdout=subprocess.PIPE)
-    cqlsh = subprocess.Popen(('/bin/cqlsh'),
+    cqlsh = subprocess.Popen(('/bin/cqlsh %s' % host),
                              stdin=query_process.stdout,
                              stdout=subprocess.PIPE)
     query_process.stdout.close()
