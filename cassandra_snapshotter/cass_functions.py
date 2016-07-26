@@ -10,6 +10,9 @@ def cassandra_query(query, output=True):
     elif type(query) is not list: # TODO needed?
         raise Exception('Query not recognized')
 
+
+#TODO CHECK FOR ERROR ON THIS QUERY
+
     query_process = subprocess.Popen(query, stdout=subprocess.PIPE)
     cqlsh = subprocess.Popen(('/bin/cqlsh', cassandra_query.host),
                              stdin=query_process.stdout,
