@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import subprocess
 import shutil
@@ -83,29 +84,28 @@ def run_snapshot(title, keyspace=None, table=None):
         cmd = cmd + keyspace
 
     subprocess.call(cmd.split())
-    '''
-    if keyspace:
-        if table:
-            subprocess.call(['nodetool', 'snapshot', '-t', title, \
-                             '-cf', table, keyspace])
-        else:
-            subprocess.call(['nodetool', 'snapshot', '-t', title, keyspace])
-    else:
-        subprocess.call(['nodetool', 'snapshot', '-t', title])
-    '''
-
 
 
 def snapshot(save_path, title_arg=None, keyspace_arg=None,
              table_arg=None):
     # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory TODO: host and port option
-    print('Clearing previous cassandra data snapshots . . .')
+    print('Checking Cassandra status . . .')
     try:
         subprocess.check_output(['nodetool', 'status'])
-        subprocess.call(['nodetool', 'clearsnapshot'])
     except:
         raise Exception('Cassandra has not yet started')
+
+    # TODO hacky
+    # get_keyspaces() calls cassandra_query which checks if the host works
+    keyspaces = get_keyspaces() # set of keyspaces
+    if len(keyspaces) == 0: # edge case
+        print('No keyspaces to snapshot. If keyspaces exist,' +
+              'host option is invalid.')
+        sys.exit(0)
+
+    print('Clearing previous cassandra data snapshots . . .')
+    subprocess.call(['nodetool', 'clearsnapshot'])
 
     if not title_arg:
         title = '{:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
@@ -115,14 +115,6 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
     save_path = save_path + title
     if os.path.exists(save_path):
         raise Exception('Error: Snapshot directory already created')
-
-    keyspaces = get_keyspaces() # set of keyspaces
-
-    if len(keyspaces) == 0: # edge case
-        print('No keyspaces to snapshot')
-        return
-
-    structure = get_dir_structure(keyspaces)
 
     print('Checking keyspace arguments . . .')
     if keyspace_arg:
@@ -134,6 +126,7 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
     else:
         print('No keyspace arguments.')
 
+    structure = get_dir_structure(keyspaces)
     print('Checking table arguments . . .')
     if table_arg:
         if not keyspace_arg or len(keyspace_arg) != 1:
@@ -198,6 +191,7 @@ if __name__ == '__main__':
     
     if cmds.node:
         CQLSH_HOST = cmds.node
+
     cassandra_query.host = CQLSH_HOST
 
     start = time.time()    
