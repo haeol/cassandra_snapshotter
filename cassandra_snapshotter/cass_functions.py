@@ -3,7 +3,7 @@ import os
 import subprocess
 
 def cassandra_query(query, output=True):
-    # cassandra_query.host is a static local variable
+    # TODO cassandra_query.host is a static local variable
 
     if type(query) is str:
         query = ['echo', query]
@@ -28,8 +28,9 @@ def cassandra_query(query, output=True):
 
 def get_data_dir():
 
-    install_locations = ['/etc/cassandra/conf/', # package install
-                         '/etc/dse/cassandra/'  # datastax enterprise package
+    install_locations = ['/etc/cassandra/conf/', # package install on centos
+                         '/etc/cassandra/',      # ubuntu package install
+                         '/etc/dse/cassandra/'   # datastax enterprise package
                          ] #TODO tarball install needs install location
 
     for loc in install_locations:
