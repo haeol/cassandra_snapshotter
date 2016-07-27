@@ -100,9 +100,8 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
     # get_keyspaces() calls cassandra_query which checks if the host works
     keyspaces = get_keyspaces() # set of keyspaces
     if len(keyspaces) == 0: # edge case
-        print('No keyspaces to snapshot. If keyspaces exist,' +
+        raise Exception('No keyspaces to snapshot. If Connection Error, ' +
               'host option is invalid.')
-        sys.exit(0)
 
     print('Clearing previous cassandra data snapshots . . .')
     subprocess.call(['nodetool', 'clearsnapshot'])
