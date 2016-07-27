@@ -104,7 +104,7 @@ def destroy_schema(flag=None):
                 cassandra_query('DROP KEYSPACE %s;' % k)
 
             data_dir = get_data_dir()
-            active_dirs = os.listdirs(data_dir)
+            active_dirs = os.listdir(data_dir)
 
             print('Removing old keyspace directories')
             for d in active_dirs:
@@ -175,7 +175,7 @@ def restore(load_path, hosts, keyspace_arg = None, table_arg = None,
             for f in os.listdir(load_table_dir):
                 if f.endswith('.db') or f.endswith('.txt.'):
                     shutil.copy(load_table_dir + '/' + f, data_table_dir)
-            
+
             print('Loading table: %s' % table)
             # sstablelaoder is slower for smaller tables, but more stable
             subprocess.call(['/bin/sstableloader', '-d', hosts, load_table_dir])
@@ -201,6 +201,7 @@ if __name__ == '__main__':
         load_path = cmds.path
 
     nodes = ', '.join(cmds.node)
+    cassandra_query.host = nodes
 
     start = time.time()
     restore(load_path, nodes, cmds.keyspace, cmds.table, cmds.y)
