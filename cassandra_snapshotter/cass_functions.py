@@ -2,7 +2,12 @@ import yaml
 import os
 import subprocess
 
-# TODO host argument
+_SYSTEM_KEYSPACES = set(['system_schema',
+                         'system_auth',
+                         'system',
+                         'system_distributed',
+                         'system_traces'])
+
 def cassandra_query(host, query, output=True):
 
     if type(query) is str:
@@ -44,11 +49,6 @@ def get_data_dir():
 
 
 def get_keyspaces(host, system=False): # include system keyspaces?
-    _SYSTEM_KEYSPACES = set(['system_schema',
-                             'system_auth',
-                             'system',
-                             'system_distributed',
-                             'system_traces'])
 
     keyspaces_string = cassandra_query(host, 'DESCRIBE keyspaces;')
     keyspaces = set(keyspaces_string.strip().split())

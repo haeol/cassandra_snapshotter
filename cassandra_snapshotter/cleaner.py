@@ -24,28 +24,28 @@ def data_cleaner(host='localhost'):
 
     print('\nDeleting old tables')
     for keyspace in structure.keys():
+        if keyspace not in cass_functions._SYSTEM_KEYSPACES:
+            # should only be directories in this folder
+            data_dirs = set(os.listdir(cass_data_dir + '/' + keyspace))
+            table_dirs = set()
 
-        # should only be directories in this folder
-        data_dirs = set(os.listdir(cass_data_dir + '/' + keyspace))
-        table_dirs = set()
+            for table in structure[keyspace].keys():
+                table_dirs.add(structure[keyspace][table])
 
-        for table in structure[keyspace].keys():
-            table_dirs.add(structure[keyspace][table])
+            inactive_dirs = data_dirs - table_dirs
+            print inactive_dirs
 
-        inactive_dirs = data_dirs - table_dirs
-        print inactive_dirs
+            print('Removing inactive directories . . .')
+            for d in inactive_dirs:
+                print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
+                #shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
 
-        print('Removing inactive directories . . .')
-        for d in inactive_dirs:
-            print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
-            #shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
-
-        '''
-        print('Removing excess db files in data directory')
-        for d in table_dirs:
-            clean_directory(cass_data_dir + '/' + keyspace + '/' + d)
-            #clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
-        '''
+            '''
+            print('Removing excess db files in data directory')
+            for d in table_dirs:
+                clean_directory(cass_data_dir + '/' + keyspace + '/' + d)
+                #clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
+            '''
 
 
 def clean_directory(table_directory):                                            
