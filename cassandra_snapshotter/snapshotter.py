@@ -9,9 +9,7 @@ import time
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
                             cassandra_query)
 
-# TODO find if below is true
 # nodetool only works with localhost, cqlsh only works with correct ip
-CQLSH_HOST = 'localhost'
 
 def parse_cmd():
 
@@ -54,7 +52,7 @@ def check_dir(folder):
         raise argparse.ArgumentTypeError('Directory is not readable')
 
 
-def write_schema(save_path, keyspace = None):
+def write_schema(host, save_path, keyspace = None):
 
     if keyspace:
         save_path = save_path + '/' + keyspace + '/'
@@ -67,7 +65,7 @@ def write_schema(save_path, keyspace = None):
 
     with open(save_path + '/' + filename, 'w') as f:
         query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
-        cqlsh = subprocess.Popen(('/bin/cqlsh', CQLSH_HOST),
+        cqlsh = subprocess.Popen(('/bin/cqlsh', host),
                                   stdin=query_process.stdout, stdout=f)
         query_process.stdout.close()
 
@@ -86,7 +84,7 @@ def run_snapshot(title, keyspace=None, table=None):
     subprocess.call(cmd.split())
 
 
-def snapshot(save_path, title_arg=None, keyspace_arg=None,
+def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
              table_arg=None):
     # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory TODO: host and port option
@@ -98,7 +96,7 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
 
     # TODO hacky
     # get_keyspaces() calls cassandra_query which checks if the host works
-    keyspaces = get_keyspaces() # set of keyspaces
+    keyspaces = get_keyspaces(host) # set of keyspaces
     if len(keyspaces) == 0: # edge case
         raise Exception('No keyspaces to snapshot. If Connection Error, ' +
               'host option is invalid.')
@@ -125,7 +123,7 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
     else:
         print('No keyspace arguments.')
 
-    structure = get_dir_structure(keyspaces)
+    structure = get_dir_structure(host, keyspaces)
     print('Checking table arguments . . .')
     if table_arg:
         if not keyspace_arg or len(keyspace_arg) != 1:
@@ -170,10 +168,10 @@ def snapshot(save_path, title_arg=None, keyspace_arg=None,
             shutil.copytree(load_dir, save_table_path)
 
     print('Saving schema . . .')
-    print_save_path = write_schema(save_path)
+    print_save_path = write_schema(host, save_path)
     print('Saved schema as %s' % print_save_path)
     for ks in keyspaces:
-        print_save_path = write_schema(save_path, ks)
+        print_save_path = write_schema(host, save_path, ks)
         print('Saved keyspace schema as %s' % print_save_path)
         pass
 
@@ -189,12 +187,12 @@ if __name__ == '__main__':
         save_path = cmds.path + '/'
     
     if cmds.node:
-        CQLSH_HOST = cmds.node
-
-    cassandra_query.host = CQLSH_HOST
+        host = cmds.node
+    else:
+        host = 'localhost'
 
     start = time.time()    
-    snapshot(save_path, cmds.title, cmds.keyspace, cmds.table)
+    snapshot(host, save_path, cmds.title, cmds.keyspace, cmds.table)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))
