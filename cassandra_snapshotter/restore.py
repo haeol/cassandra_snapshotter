@@ -9,6 +9,7 @@ import time
 
 from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
                             get_table_directories, get_dir_structure)
+from cleaner import data_cleaner
 
 
 def parse_cmd():
@@ -56,7 +57,9 @@ def check_dir(folder):
         raise argparse.ArgumentTypeError('Directory is not readable')
 
 
-def restore_schema(load_path, keyspace):
+def restore_schema(host, load_path, keyspace):
+    # Cassandra should only need one host in the cluster to restore the schema
+    # in every node
 
     schema_location = load_path + '/' + keyspace + '/' + keyspace + '_schema.cql'
 
@@ -64,7 +67,7 @@ def restore_schema(load_path, keyspace):
         raise Exception('Schema not found: %s' % schema_location)
 
     with open(schema_location, 'r') as f:
-        cassandra_query(f.read())
+        cassandra_query(host, f.read())
 
 
 def clean_directory(table_directory):
@@ -74,11 +77,11 @@ def clean_directory(table_directory):
             os.remove(table_directory + '/' + f)
 
 
-def destroy_schema(flag=None):
+def destroy_schema(host, flag=None):
 
     success = False
     destroy = False
-    keyspaces = get_keyspaces()
+    keyspaces = get_keyspaces(host)
 
     if len(keyspaces) > 0:
 
@@ -101,7 +104,7 @@ def destroy_schema(flag=None):
 
             for k in keyspaces: # drop old keyspaces
                 print('Dropping keyspace: %s' % k)
-                cassandra_query('DROP KEYSPACE %s;' % k)
+                cassandra_query(host, 'DROP KEYSPACE %s;' % k)
 
             data_dir = get_data_dir()
             active_dirs = os.listdir(data_dir)
@@ -120,13 +123,14 @@ def destroy_schema(flag=None):
     return success
 
 
-def restore(load_path, hosts, keyspace_arg = None, table_arg = None,
+def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
             y_flag=None):
 
     print('Destroying existing database')
-    if not destroy_schema(y_flag):
+    if not destroy_schema(hosts[0], y_flag):
         print('Unable to destroy previous data, exiting script')
         sys.exit(0)
+    data_cleaner(hosts[0])
 
     # keyspaces inside snapshot directory
     avaliable_keyspaces = filter(lambda x: os.path.isdir(load_path + '/' + x), \
@@ -145,11 +149,10 @@ def restore(load_path, hosts, keyspace_arg = None, table_arg = None,
 
     for keyspace in load_keyspaces:
         print('Creating schema for %s' % keyspace)
-        restore_schema(load_path, keyspace)
+        restore_schema(hosts[0], load_path, keyspace)
 
-    existing_keyspaces = get_keyspaces()
-    structure = get_dir_structure(existing_keyspaces)
-    cass_data_dir = get_data_dir()
+    existing_keyspaces = get_keyspaces(hosts[0])
+    structure = get_dir_structure(hosts[0], existing_keyspaces)
 
     for keyspace in load_keyspaces:
 
@@ -166,30 +169,12 @@ def restore(load_path, hosts, keyspace_arg = None, table_arg = None,
                 raise Exception('Table not in schema, error with snapshot')
 
             load_table_dir = load_path + '/' + keyspace + '/' + table
-            data_table_dir = cass_data_dir + '/' + keyspace + '/' + \
-                             structure[keyspace][table]
+            print('\n\nLoading table: %s' % table)
+            subprocess.call(['/bin/sstableloader',
+                             '-d', ', '.join(hosts),
+                             load_table_dir])
 
-            print('Checking for old data files')
-            clean_directory(data_table_dir)
-
-            for f in os.listdir(load_table_dir):
-                if f.endswith('.db') or f.endswith('.txt.'):
-                    shutil.copy(load_table_dir + '/' + f, data_table_dir)
-
-            print('Loading table: %s' % table)
-            # sstablelaoder is slower for smaller tables, but more stable
-            subprocess.call(['/bin/sstableloader', '-d', hosts, load_table_dir])
-            #TODO determine which to use
-            #TODO still needs to be tested on multi-node cluster
-            '''
-            for h in hosts.split(', '):
-                subprocess.call(['/bin/nodetool', '-h', h, 'refresh',
-                                 '--', keyspace, table])
-            '''
-            print('Cleaning data directory: %s' % data_table_dir)
-            clean_directory(data_table_dir)
-
-            print('Restoration complete')
+    print('Restoration complete')
 
 
 if __name__ == '__main__':
@@ -200,15 +185,12 @@ if __name__ == '__main__':
     else:
         load_path = cmds.path
 
-    nodes = ', '.join(cmds.node)
-    cassandra_query.host = nodes
+    if len(cmds.node) == 0:
+        raise Exception('Node/host ip required. See restore.py -h for details.')
 
     start = time.time()
-    restore(load_path, nodes, cmds.keyspace, cmds.table, cmds.y)
+    restore(cmds.node, load_path, cmds.keyspace, cmds.table, cmds.y)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))
-
-
-
 

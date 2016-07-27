@@ -4,11 +4,11 @@ import shutil
 from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
                             get_table_directories, get_dir_structure)
 
-def data_cleaner():
+def data_cleaner(host='localhost'):
     # This fuction finds inactive data directories and removes them
     # This includes unused keyspace directories and table directories
 
-    structure = get_dir_structure(get_keyspaces(system=True))
+    structure = get_dir_structure(host, get_keyspaces(host, system=True))
     cass_data_dir = get_data_dir()
 
     print('Deleting old keyspaces . . .')
@@ -33,16 +33,19 @@ def data_cleaner():
             table_dirs.add(structure[keyspace][table])
 
         inactive_dirs = data_dirs - table_dirs
+        print inactive_dirs
 
         print('Removing inactive directories . . .')
         for d in inactive_dirs:
             print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
-            shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
+            #shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
 
+        '''
         print('Removing excess db files in data directory')
         for d in table_dirs:
             clean_directory(cass_data_dir + '/' + keyspace + '/' + d)
             #clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
+        '''
 
 
 def clean_directory(table_directory):                                            
@@ -54,5 +57,5 @@ def clean_directory(table_directory):
 
 if __name__ == '__main__':
     # TODO add option for -y flag?
-    data_cleaner()
+    data_cleaner('10.0.15.11')
 
