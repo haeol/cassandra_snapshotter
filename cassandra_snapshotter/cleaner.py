@@ -1,8 +1,22 @@
 import os
 import sys
 import shutil
+import argparse
+
 from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
-                            get_table_directories, get_dir_structure)
+                            get_table_directories, get_dir_structure,
+                            _SYSTEM_KEYSPACES)
+
+def parse_cmd():
+
+    parser = argparse.ArgumentParser(description='Cleaner')
+
+    parser.add_argument('-n', '--node', '--host',
+                        required=False,
+                        help='Specify host/node ip'
+    )
+    return parser.parse_args()
+
 
 def data_cleaner(host='localhost'):
     # This fuction finds inactive data directories and removes them
@@ -14,17 +28,27 @@ def data_cleaner(host='localhost'):
     print('Deleting old keyspaces . . .')
     for ks in os.listdir(cass_data_dir):
         if ks not in structure.keys():
-            confirm = str(raw_input('Delete ks %s? [y/n] ' % ks))
+            print ks
+            #shutil.rmtree(cass_data_dir + '/' + ks)
+
+            # TODO need?
+            '''
+            if not y_flag:
+                confirm = str(raw_input('Delete ks %s? [y/n] ' % ks))
+            else:
+                confirm = 'y'
 
             if confirm == 'y':
-                shutil.rmtree(cass_data_dir+ '/' + ks)
+                #shutil.rmtree(cass_data_dir+ '/' + ks)
+                pass
             else:
                 print('Exiting script')
                 sys.exit(1)
+            '''
 
     print('\nDeleting old tables')
     for keyspace in structure.keys():
-        if keyspace not in cass_functions._SYSTEM_KEYSPACES:
+        if keyspace not in _SYSTEM_KEYSPACES:
             # should only be directories in this folder
             data_dirs = set(os.listdir(cass_data_dir + '/' + keyspace))
             table_dirs = set()
@@ -38,7 +62,7 @@ def data_cleaner(host='localhost'):
             print('Removing inactive directories . . .')
             for d in inactive_dirs:
                 print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
-                #shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
+                shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
 
             '''
             print('Removing excess db files in data directory')
@@ -56,6 +80,14 @@ def clean_directory(table_directory):
                                                 
 
 if __name__ == '__main__':
-    # TODO add option for -y flag?
-    data_cleaner('10.0.15.11')
+
+    cmds = parse_cmd()
+
+    if cmds.node:
+        host = cmds.node
+    else:
+        host = 'localhost'
+
+    data_cleaner(host)
+
 
