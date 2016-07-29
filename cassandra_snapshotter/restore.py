@@ -47,6 +47,15 @@ def parse_cmd():
     return parser.parse_args()
 
 
+def check_cassandra(host):
+
+    ks = get_keyspaces(host, system=True)
+    if len(ks) == 0:
+        raise Exception('Cannot find system keyspaces, invalid host')
+
+    return True
+
+
 def check_dir(folder):
 
     if not os.path.isdir(folder):
@@ -130,7 +139,8 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
     if not destroy_schema(hosts[0], y_flag):
         print('Unable to destroy previous data, exiting script')
         sys.exit(0)
-    data_cleaner(hosts[0])
+    # delete old keyspace directories
+    #data_cleaner(hosts[0])
 
     # keyspaces inside snapshot directory
     avaliable_keyspaces = filter(lambda x: os.path.isdir(load_path + '/' + x), \
@@ -189,6 +199,7 @@ if __name__ == '__main__':
         raise Exception('Node/host ip required. See restore.py -h for details.')
 
     start = time.time()
+    check_cassandra(cmds.node[0])
     restore(cmds.node, load_path, cmds.keyspace, cmds.table, cmds.y)
     end = time.time()
 

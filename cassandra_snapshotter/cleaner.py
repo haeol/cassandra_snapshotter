@@ -13,23 +13,26 @@ def parse_cmd():
 
     parser.add_argument('-n', '--node', '--host',
                         required=False,
-                        help='Specify host/node ip'
+                        help='Specify local host/node ip'
     )
     return parser.parse_args()
 
 
-def data_cleaner(host='localhost'):
+def data_cleaner(host='localhost', backups=False):
     # This fuction finds inactive data directories and removes them
     # This includes unused keyspace directories and table directories
 
-    structure = get_dir_structure(host, get_keyspaces(host, system=True))
+    keyspaces = get_keyspaces(host, system=True)
+    if len(keyspaces) == 0: # there should always be system keyspaces
+        raise Exception('Invalid host parameter')
+    structure = get_dir_structure(host, keyspaces)
     cass_data_dir = get_data_dir()
 
     print('Deleting old keyspaces . . .')
     for ks in os.listdir(cass_data_dir):
-        if ks not in structure.keys():
-            print ks
-            #shutil.rmtree(cass_data_dir + '/' + ks)
+        if ks not in keyspaces:
+            print(cass_data_dir + '/' + ks)
+            shutil.rmtree(cass_data_dir + '/' + ks)
 
             # TODO need?
             '''
@@ -46,10 +49,12 @@ def data_cleaner(host='localhost'):
                 sys.exit(1)
             '''
 
-    print('\nDeleting old tables')
-    for keyspace in structure.keys():
+
+    print('\nDeleting old tables . . .')
+    for keyspace in keyspaces:
         if keyspace not in _SYSTEM_KEYSPACES:
             # should only be directories in this folder
+            print('\nProcessing keyspace: %s' % keyspace)
             data_dirs = set(os.listdir(cass_data_dir + '/' + keyspace))
             table_dirs = set()
 
@@ -57,19 +62,16 @@ def data_cleaner(host='localhost'):
                 table_dirs.add(structure[keyspace][table])
 
             inactive_dirs = data_dirs - table_dirs
-            print inactive_dirs
 
             print('Removing inactive directories . . .')
             for d in inactive_dirs:
                 print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
                 shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
 
-            '''
-            print('Removing excess db files in data directory')
-            for d in table_dirs:
-                clean_directory(cass_data_dir + '/' + keyspace + '/' + d)
-                #clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
-            '''
+            if backups:
+                print('Removing old backup db files')
+                for d in table_dirs:
+                    clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
 
 
 def clean_directory(table_directory):                                            
@@ -88,6 +90,6 @@ if __name__ == '__main__':
     else:
         host = 'localhost'
 
-    data_cleaner(host)
+    data_cleaner(host) #TODO backups option?
 
 
