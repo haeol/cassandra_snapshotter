@@ -9,7 +9,7 @@ import time
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
                             cassandra_query)
 
-# nodetool only works with localhost, cqlsh only works with correct ip
+# nodetool only works with localhost, cqlsh only works with the node's ip
 
 def parse_cmd():
 
@@ -84,10 +84,9 @@ def run_snapshot(title, keyspace=None, table=None):
     subprocess.call(cmd.split())
 
 
-def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
-             table_arg=None):
+def snapshot(host, save_path, title_arg=None, keyspace_arg=None, table_arg=None):
     # nodetool can only run localhost and cqlsh can only run on host argument
-    # clear snapshot in default snapshot directory TODO: host and port option
+    # clear snapshot in default snapshot directory
     print('Checking Cassandra status . . .')
     try:
         subprocess.check_output(['nodetool', 'status'])
@@ -101,9 +100,6 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
         raise Exception('No keyspaces to snapshot. If Connection Error, ' +
               'host option is invalid.')
 
-    print('Clearing previous cassandra data snapshots . . .')
-    subprocess.call(['nodetool', 'clearsnapshot'])
-
     if not title_arg:
         title = '{:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
     else:
@@ -114,7 +110,7 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
         raise Exception('Error: Snapshot directory already created')
 
     print('Checking keyspace arguments . . .')
-    if keyspace_arg:
+    if keyspace_arg: # checks if keyspace argument exists in database
         for ks in keyspace_arg:
             if ks not in keyspaces:
                 raise Exception('Keyspace "%s" not found.' % ks)
@@ -123,7 +119,7 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
     else:
         print('No keyspace arguments.')
 
-    structure = get_dir_structure(host, keyspaces)
+    structure = get_dir_structure(host, keyspaces) # basic schema in json format
     print('Checking table arguments . . .')
     if table_arg:
         if not keyspace_arg or len(keyspace_arg) != 1:
@@ -131,14 +127,17 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
         ks = next(iter(keyspaces)) # retrieve only element in set
         for tb in table_arg:
             if tb not in structure[ks]:
-                raise Exception('Table %s not found in keyspace %s' % (tb, ks))
+                raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
         else:
             tables = set(table_arg)
     else:
         print('No table arguments.')
     print('Valid arguments.\n')
 
-    print('Saving snapshot into %s . . .' % title)
+    print('Clearing previous cassandra data snapshots . . .')
+    subprocess.call(['nodetool', 'clearsnapshot'])
+
+    print('Saving snapshot into %s . . .' % save_path)
     print('Producing snapshots . . .')
     if keyspace_arg:
         if table_arg:
@@ -175,7 +174,7 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None,
         print('Saved keyspace schema as %s' % print_save_path)
         pass
 
-    print('\nProcess complete. Snapshot stored in %s\n\n' % save_path)
+    print('\nProcess complete. Snapshot stored in %s\n' % save_path)
 
 
 if __name__ == '__main__':

@@ -31,30 +31,14 @@ def data_cleaner(host='localhost', backups=False):
     print('Deleting old keyspaces . . .')
     for ks in os.listdir(cass_data_dir):
         if ks not in keyspaces:
-            print(cass_data_dir + '/' + ks)
+            print('\tDeleting: ' + cass_data_dir + '/' + ks)
             shutil.rmtree(cass_data_dir + '/' + ks)
-
-            # TODO need?
-            '''
-            if not y_flag:
-                confirm = str(raw_input('Delete ks %s? [y/n] ' % ks))
-            else:
-                confirm = 'y'
-
-            if confirm == 'y':
-                #shutil.rmtree(cass_data_dir+ '/' + ks)
-                pass
-            else:
-                print('Exiting script')
-                sys.exit(1)
-            '''
-
 
     print('\nDeleting old tables . . .')
     for keyspace in keyspaces:
         if keyspace not in _SYSTEM_KEYSPACES:
-            # should only be directories in this folder
             print('\nProcessing keyspace: %s' % keyspace)
+            # should only be directories in this folder
             data_dirs = set(os.listdir(cass_data_dir + '/' + keyspace))
             table_dirs = set()
 
@@ -65,7 +49,7 @@ def data_cleaner(host='localhost', backups=False):
 
             print('Removing inactive directories . . .')
             for d in inactive_dirs:
-                print('\t' + cass_data_dir + '/' + keyspace + '/' + d)
+                print('\tDeleting: ' + cass_data_dir + '/' + keyspace + '/' + d)
                 shutil.rmtree(cass_data_dir + '/' + keyspace + '/' + d)
 
             if backups:

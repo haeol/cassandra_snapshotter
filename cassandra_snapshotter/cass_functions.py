@@ -9,10 +9,11 @@ _SYSTEM_KEYSPACES = set(['system_schema',
                          'system_traces'])
 
 def cassandra_query(host, query, output=True):
+    # This function takes in a cassandra query and returns the output
 
     if type(query) is str:
         query = ['echo', query]
-    elif type(query) is not list: # TODO needed?
+    elif type(query) is not list:
         raise Exception('Query not recognized')
 
     query_process = subprocess.Popen(query, stdout=subprocess.PIPE)
@@ -29,6 +30,7 @@ def cassandra_query(host, query, output=True):
 
 
 def get_data_dir():
+    # This function uses cassandra.yaml to find the data directory
 
     install_locations = ['/etc/cassandra/conf/', # package install on centos
                          '/etc/cassandra/',      # ubuntu package install
@@ -40,7 +42,7 @@ def get_data_dir():
             yaml_dir = loc + 'cassandra.yaml'
             break
     else:
-        # TODO user manual yaml location input through txt(?) file
+        # TODO user inputs yaml location (too many args to pass on call?)
         raise Exception('Could not find cassandra YAML file.')
 
     with open(yaml_dir, 'r') as f:
@@ -48,7 +50,8 @@ def get_data_dir():
     return cass_yaml['data_file_directories'][0]
 
 
-def get_keyspaces(host, system=False): # include system keyspaces?
+def get_keyspaces(host, system=False):
+    # This function calls Cassandra to find the keyspaces in the database
 
     keyspaces_string = cassandra_query(host, 'DESCRIBE keyspaces;')
     keyspaces = set(keyspaces_string.strip().split())
@@ -57,6 +60,8 @@ def get_keyspaces(host, system=False): # include system keyspaces?
     return keyspaces
 
 def get_table_directories(host, keyspace):
+    # This function calls Cassandra to retrieve the tables and their
+    # corresponding uuid
 
     cmd = ("SELECT table_name, id FROM system_schema.tables \
             WHERE keyspace_name='%s';" % keyspace)
@@ -88,6 +93,9 @@ def get_table_directories(host, keyspace):
 
 
 def get_dir_structure(host, keyspaces):
+    # This function stores the basic Cassandra schema in the following format
+    # where each value to each corresponding table is that table's data
+    # directory
 
     '''
     structure: {

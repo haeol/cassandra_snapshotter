@@ -14,7 +14,7 @@ from cleaner import data_cleaner
 
 def parse_cmd():
 
-    parser = argparse.ArgumentParser(description='Snapshotter')
+    parser = argparse.ArgumentParser(description='Snapshot Restoration')
 
     parser.add_argument('-d', '--path', 
                         type=check_dir, 
@@ -25,8 +25,7 @@ def parse_cmd():
                         required=True,
                         nargs='+',
                         help="Specify host address(es)"
-    ) # TODO need to test on multinode cluster, necessary?
-      # script running on single nodes or data center?
+    ) # TODO still not sure why sstableloader would need more than 1 host
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
                         nargs='+',
@@ -42,12 +41,14 @@ def parse_cmd():
                         action='store_true',
                         help="Destroy existing database without prompt"
     )
-    # TODO sstableloader option? safer loading?
 
     return parser.parse_args()
 
 
 def check_cassandra(host):
+    # TODO better way to check if host option is valid?
+    # If there are no system keyspaces that can be retrieved, there is a problem
+    # with the host input, or there is a problem with Cassandra
 
     ks = get_keyspaces(host, system=True)
     if len(ks) == 0:
@@ -67,8 +68,8 @@ def check_dir(folder):
 
 
 def restore_schema(host, load_path, keyspace):
-    # Cassandra should only need one host in the cluster to restore the schema
-    # in every node
+    # This function opens the schema files in each keyspace and writes it in 
+    # cqlsh
 
     schema_location = load_path + '/' + keyspace + '/' + keyspace + '_schema.cql'
 
@@ -77,13 +78,6 @@ def restore_schema(host, load_path, keyspace):
 
     with open(schema_location, 'r') as f:
         cassandra_query(host, f.read())
-
-
-def clean_directory(table_directory):
-    # TODO does incremental backups work with this?
-    for f in os.listdir(table_directory):
-        if f.endswith('.db') or f.endswith('.txt') or f.endswith('.crc32'):
-            os.remove(table_directory + '/' + f)
 
 
 def destroy_schema(host, flag=None):
@@ -97,7 +91,7 @@ def destroy_schema(host, flag=None):
         print('Removing keyspaces:')
         for k in keyspaces:
             print('\t' + k)
-        if not flag:
+        if not flag: # check if user wahts to destroy listed keyspaces
 
             option = raw_input('Destroy keyspaces? [y/n]')
             if option == 'y' or option == 'Y':
@@ -135,12 +129,11 @@ def destroy_schema(host, flag=None):
 def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
             y_flag=None):
 
-    print('Destroying existing database')
-    if not destroy_schema(hosts[0], y_flag):
-        print('Unable to destroy previous data, exiting script')
-        sys.exit(0)
-    # delete old keyspace directories
-    #data_cleaner(hosts[0])
+    print('Checking Cassandra status . . .')
+    try:
+        subprocess.check_output(['nodetool', 'status'])
+    except:
+        raise Exception('Cassandra has not yet started')
 
     # keyspaces inside snapshot directory
     avaliable_keyspaces = filter(lambda x: os.path.isdir(load_path + '/' + x), \
@@ -157,20 +150,45 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
     else:
         load_keyspaces = avaliable_keyspaces
 
+    
+    print('Checking table arguments . . .')
+    if table_arg:
+        if not keyspace_arg or len(keyspace_arg) != 1:
+            raise Exception('Only one keyspace can be specified with table arg')
+        for tb in table_arg:
+            if tb not in os.listdir(load_path + '/' + load_keyspaces[0]):
+                raise Exception('Table "%s" not found in keyspace "%s"'
+                              % (tb, load_keyspaces[0]))
+        else:
+            load_tables = set(table_arg)
+    else:
+        print('No table arguments.')
+    print('Valid arguments.\n')
+    
+    print('Destroying existing database')
+    if not destroy_schema(hosts[0], y_flag):
+        print('Unable to destroy previous data, exiting script')
+        sys.exit(0)
+    # delete old keyspace directories
+    data_cleaner(hosts[0])
+
     for keyspace in load_keyspaces:
         print('Creating schema for %s' % keyspace)
         restore_schema(hosts[0], load_path, keyspace)
 
+    # keyspaces just created by schema
     existing_keyspaces = get_keyspaces(hosts[0])
+    # basic schema in a json format
     structure = get_dir_structure(hosts[0], existing_keyspaces)
-
+    
     for keyspace in load_keyspaces:
 
-        print('Loading keyspaces %s' % keyspace)
-        load_tables = filter(
-                lambda x: os.path.isdir(load_path + '/' + keyspace + '/' + x),
-                os.listdir(load_path + '/' + keyspace)
-        )
+        print('Loading keyspace "%s"' % keyspace)
+        if not table_arg:
+            load_tables = filter(
+                    lambda x: os.path.isdir(load_path + '/' + keyspace + '/' + x),
+                    os.listdir(load_path + '/' + keyspace)
+            )
         existing_tables = structure[keyspace].keys()
 
         for table in load_tables:
@@ -180,6 +198,7 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
 
             load_table_dir = load_path + '/' + keyspace + '/' + table
             print('\n\nLoading table: %s' % table)
+            # sstableloader has been more stable than nodetool refresh
             subprocess.call(['/bin/sstableloader',
                              '-d', ', '.join(hosts),
                              load_table_dir])
