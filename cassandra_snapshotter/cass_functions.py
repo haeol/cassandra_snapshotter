@@ -8,6 +8,11 @@ _SYSTEM_KEYSPACES = set(['system_schema',
                          'system_distributed',
                          'system_traces'])
 
+_YAML_LOCATIONS = ['/etc/cassandra/conf/', # package install on centos
+                   '/etc/cassandra/',      # ubuntu package install
+                   '/etc/dse/cassandra/'   # datastax enterprise package
+                  ] #TODO tarball install needs install location
+
 def cassandra_query(host, query, output=True):
     # This function takes in a cassandra query and returns the output
 
@@ -29,15 +34,10 @@ def cassandra_query(host, query, output=True):
         return output
 
 
-def get_data_dir():
-    # This function uses cassandra.yaml to find the data directory
+def get_yaml_var(var):
+    # This function uses cassandra.yaml to find a specific variable in it
 
-    install_locations = ['/etc/cassandra/conf/', # package install on centos
-                         '/etc/cassandra/',      # ubuntu package install
-                         '/etc/dse/cassandra/'   # datastax enterprise package
-                         ] #TODO tarball install needs install location
-
-    for loc in install_locations:
+    for loc in _YAML_LOCATIONS:
         if os.path.exists(loc + 'cassandra.yaml'):
             yaml_dir = loc + 'cassandra.yaml'
             break
@@ -47,7 +47,15 @@ def get_data_dir():
 
     with open(yaml_dir, 'r') as f:
         cass_yaml = yaml.load(f)
-    return cass_yaml['data_file_directories'][0]
+    return cass_yaml[var][0]
+    
+
+def get_data_dir():
+    return get_yaml_var('data_file_directories')
+
+
+def get_rpc_address():
+    return get_yaml_var('rpc_address')    
 
 
 def get_keyspaces(host, system=False):
