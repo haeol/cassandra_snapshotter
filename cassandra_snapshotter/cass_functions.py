@@ -47,15 +47,15 @@ def get_yaml_var(var):
 
     with open(yaml_dir, 'r') as f:
         cass_yaml = yaml.load(f)
-    return cass_yaml[var][0]
+    return cass_yaml[var]
     
 
 def get_data_dir():
-    return get_yaml_var('data_file_directories')
+    return get_yaml_var('data_file_directories')[0]
 
 
 def get_rpc_address():
-    return get_yaml_var('rpc_address')    
+    return get_yaml_var('rpc_address')
 
 
 def get_keyspaces(host, system=False):
