@@ -58,9 +58,17 @@ def write_schema(host, save_path, keyspace = None):
         query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
         cqlsh = subprocess.Popen(('/bin/cqlsh', host),
                                   stdin=query_process.stdout, stdout=f)
+        cqlsh.wait()
         query_process.stdout.close()
 
     return (save_path + filename)
+
+
+def write_ring_info(save_path):
+    
+    with open(save_path + '/ring_info.txt', 'w') as f:
+        nodetool = subprocess.Popen(['nodetool', 'ring'], stdout=f)
+        nodetool.wait()
 
 
 def run_snapshot(title, keyspace=None, table=None):
@@ -79,26 +87,19 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory
     host = get_rpc_address()
+    title = host
     save_root = sys.path[0] + '/.snapshots/'
 
-    print('Checking Cassandra status . . .')
-    try:
-        subprocess.check_output(['nodetool', 'status'])
-    except:
-        raise Exception('Cassandra has not yet started')
+    # skip checking cassandra, ansible does it for us
 
-    # TODO hacky
-    # get_keyspaces() calls cassandra_query which checks if the host works
     keyspaces = get_keyspaces(host) # set of keyspaces
     if len(keyspaces) == 0: # edge case
         raise Exception('No keyspaces to snapshot. If Connection Error, ' +
-              'host option is invalid.')
+              'error with rpc_address host (found in cassandra.yaml)')
 
-    if not title_arg:
-        title = '{:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
-    else:
-        title = title_arg
+    # timestamp name in remote storage, all snapshot names by rpc_address
 
+    # TODO check args for every host? should be fine because different threads
     print('Checking keyspace arguments . . .')
     if keyspace_arg: # checks if keyspace argument exists in database
         for ks in keyspace_arg:
@@ -172,32 +173,20 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     for ks in keyspaces:
         print_save_path = write_schema(host, save_path, ks)
         print('Saved keyspace schema as %s' % print_save_path)
-        pass
+
+    print('Saving ring information . . .')
+    write_ring_info(save_path)
 
     print('Compressing snapshot file')
-    zip_snapshot(save_path, save_root)
+    shutil.make_archive(save_path, 'zip', save_path)
 
     print('\nProcess complete. Snapshot stored in %s\n' % save_path)
-
-
-def zip_snapshot(src, dest):
-    zipf = zipfile.ZipFile(dest + get_rpc_address() + '.zip',
-                           'w', zipfile.ZIP_DEFLATED)
-
-    zipf.write(os.path.abspath(src), 
-    for root, dirs, files in os.walk(src):
-        for f in files:
-            absname = os.path.abspath(os.path.join(root, f))
-            arcname = absname[len(src) + 1:]
-            zipf.write(absname, arcname)
-            #os.path.join(root, files))
-    zipf.close()
 
 
 if __name__ == '__main__':
     cmds = parse_cmd()
 
-    start = time.time()    
+    start = time.time()
     snapshot(cmds.title, cmds.keyspace, cmds.table)
     end = time.time()
 

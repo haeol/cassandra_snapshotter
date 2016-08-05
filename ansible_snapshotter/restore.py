@@ -116,6 +116,8 @@ def restore(hosts, keyspace_arg = None, table_arg = None, y_flag=None):
     cqlsh_host = get_rpc_address()
     
     snapshot_root = sys.path[0] + '/.snapshots/'
+
+    # will not need in future, ansible script should take care of this TODO
     if os.path.isdir(snapshot_root): # remove old snapshots from .snapshot
         for f in os.listdir(snapshot_root):
             if os.path.isdir(snapshot_root + f):
@@ -124,14 +126,14 @@ def restore(hosts, keyspace_arg = None, table_arg = None, y_flag=None):
             else:
                 os.remove(snapshot_root + f)
             '''
-    os.mkdir(snapshot_root + cqlsh_host)
-    zip_path = snapshot_root + cqlsh_host + '.zip'
+    load_path = snapshot_root + cqlsh_host
     print('Unzipping snapshot file')
+    os.mkdir(load_path)
+    zip_path = load_path + '.zip'
     zipf = zipfile.ZipFile(zip_path, 'r')
-    zipf.extractall(snapshot_root + cqlsh_host)
+    zipf.extractall(load_path)
     zipf.close()
 
-    exit(0)
     # skip checking cassandra status because ansible does it for us
 
     # keyspaces inside snapshot directory
