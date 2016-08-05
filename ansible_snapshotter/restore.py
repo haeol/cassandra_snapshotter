@@ -6,9 +6,11 @@ import argparse
 import subprocess
 import shutil
 import time
+import zipfile
 
 from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
-                            get_table_directories, get_dir_structure)
+                            get_rpc_address, get_table_directories,
+                            get_dir_structure)
 from cleaner import data_cleaner
 
 
@@ -16,16 +18,11 @@ def parse_cmd():
 
     parser = argparse.ArgumentParser(description='Snapshot Restoration')
 
-    parser.add_argument('-d', '--path', 
-                        type=check_dir, 
-                        required=True,
-                        help="Specify path to load snapshots"
-    )
     parser.add_argument('-n', '--node', '--host',
                         required=True,
                         nargs='+',
                         help="Specify host address(es)"
-    ) # TODO still not sure why sstableloader would need more than 1 host
+    ) # sstableloader needs all ring hosts for ring information
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
                         nargs='+',
@@ -43,18 +40,6 @@ def parse_cmd():
     )
 
     return parser.parse_args()
-
-
-def check_cassandra(host):
-    # TODO better way to check if host option is valid?
-    # If there are no system keyspaces that can be retrieved, there is a problem
-    # with the host input, or there is a problem with Cassandra
-
-    ks = get_keyspaces(host, system=True)
-    if len(ks) == 0:
-        raise Exception('Cannot find system keyspaces, invalid host')
-
-    return True
 
 
 def check_dir(folder):
@@ -126,14 +111,28 @@ def destroy_schema(host, flag=None):
     return success
 
 
-def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
-            y_flag=None):
+def restore(hosts, keyspace_arg = None, table_arg = None, y_flag=None):
 
-    print('Checking Cassandra status . . .')
-    try:
-        subprocess.check_output(['nodetool', 'status'])
-    except:
-        raise Exception('Cassandra has not yet started')
+    cqlsh_host = get_rpc_address()
+    
+    snapshot_root = sys.path[0] + '/.snapshots/'
+    if os.path.isdir(snapshot_root): # remove old snapshots from .snapshot
+        for f in os.listdir(snapshot_root):
+            if os.path.isdir(snapshot_root + f):
+                shutil.rmtree(snapshot_root + f)
+            '''
+            else:
+                os.remove(snapshot_root + f)
+            '''
+    os.mkdir(snapshot_root + cqlsh_host)
+    zip_path = snapshot_root + cqlsh_host + '.zip'
+    print('Unzipping snapshot file')
+    zipf = zipfile.ZipFile(zip_path, 'r')
+    zipf.extractall(snapshot_root + cqlsh_host)
+    zipf.close()
+
+    exit(0)
+    # skip checking cassandra status because ansible does it for us
 
     # keyspaces inside snapshot directory
     avaliable_keyspaces = filter(lambda x: os.path.isdir(load_path + '/' + x), \
@@ -150,7 +149,6 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
     else:
         load_keyspaces = avaliable_keyspaces
 
-    
     print('Checking table arguments . . .')
     if table_arg:
         if not keyspace_arg or len(keyspace_arg) != 1:
@@ -166,20 +164,22 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
     print('Valid arguments.\n')
     
     print('Destroying existing database')
-    if not destroy_schema(hosts[0], y_flag):
+    if not destroy_schema(cqlsh_host, y_flag):
         print('Unable to destroy previous data, exiting script')
         sys.exit(0)
     # delete old keyspace directories
-    data_cleaner(hosts[0])
+    print('Clearing previous Cassandra data . . .')
+    data_cleaner(cqlsh_host, backups=True) # backups files not relevant anymore
+    subprocess.call(['nodetool', 'clearsnapshot'])
 
     for keyspace in load_keyspaces:
         print('Creating schema for %s' % keyspace)
-        restore_schema(hosts[0], load_path, keyspace)
+        restore_schema(cqlsh_host, load_path, keyspace)
 
     # keyspaces just created by schema
-    existing_keyspaces = get_keyspaces(hosts[0])
+    existing_keyspaces = get_keyspaces(cqlsh_host)
     # basic schema in a json format
-    structure = get_dir_structure(hosts[0], existing_keyspaces)
+    structure = get_dir_structure(cqlsh_host, existing_keyspaces)
     
     for keyspace in load_keyspaces:
 
@@ -200,7 +200,7 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
             print('\n\nLoading table: %s' % table)
             # sstableloader has been more stable than nodetool refresh
             subprocess.call(['/bin/sstableloader',
-                             '-d', ', '.join(hosts),
+                             '-d', ','.join(hosts),
                              load_table_dir])
 
     print('Restoration complete')
@@ -209,17 +209,12 @@ def restore(hosts, load_path, keyspace_arg = None, table_arg = None,
 if __name__ == '__main__':
 
     cmds = parse_cmd()
-    if cmds.path.endswith('\\') or cmds.path.endswith('/'):
-        load_path = cmds.path[:-1]
-    else:
-        load_path = cmds.path
 
     if len(cmds.node) == 0:
         raise Exception('Node/host ip required. See restore.py -h for details.')
 
     start = time.time()
-    check_cassandra(cmds.node[0])
-    restore(cmds.node, load_path, cmds.keyspace, cmds.table, cmds.y)
+    restore(cmds.node, cmds.keyspace, cmds.table, cmds.y)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))

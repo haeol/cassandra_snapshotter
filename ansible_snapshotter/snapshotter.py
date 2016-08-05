@@ -5,21 +5,16 @@ import subprocess
 import shutil
 import datetime
 import time
+import zipfile
 
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
-                            cassandra_query)
+                            get_rpc_address, cassandra_query)
 
 # nodetool only works with localhost, cqlsh only works with the node's ip
 
 def parse_cmd():
 
     parser = argparse.ArgumentParser(description='Snapshotter')
-
-    parser.add_argument('-d', '--path',
-                        type=check_dir,
-                        required=True,
-                        help='Specify path to save snapshots'
-    )
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
                         nargs='+',
@@ -33,10 +28,6 @@ def parse_cmd():
     parser.add_argument('-t', '--title', '--tag', '--name',
                         required=False,
                         help='Enter title/name for snapshot'
-    )
-    parser.add_argument('-n', '--node', '--host',
-                        required=False,
-                        help='Enter the host ip'
     )
     return parser.parse_args()
 
@@ -84,9 +75,12 @@ def run_snapshot(title, keyspace=None, table=None):
     subprocess.call(cmd.split())
 
 
-def snapshot(host, save_path, title_arg=None, keyspace_arg=None, table_arg=None):
+def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory
+    host = get_rpc_address()
+    save_root = sys.path[0] + '/.snapshots/'
+
     print('Checking Cassandra status . . .')
     try:
         subprocess.check_output(['nodetool', 'status'])
@@ -104,10 +98,6 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None, table_arg=None)
         title = '{:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
     else:
         title = title_arg
-
-    save_path = save_path + title
-    if os.path.exists(save_path):
-        raise Exception('Error: Snapshot directory already created')
 
     print('Checking keyspace arguments . . .')
     if keyspace_arg: # checks if keyspace argument exists in database
@@ -136,6 +126,16 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None, table_arg=None)
 
     print('Clearing previous cassandra data snapshots . . .')
     subprocess.call(['nodetool', 'clearsnapshot'])
+    if os.path.isdir(save_root): # remove old snapshots from .snapshot
+        for f in os.listdir(save_root):
+            if os.path.isdir(save_root + f):
+                shutil.rmtree(save_root + f)
+            else:
+                os.remove(save_root + f)
+
+    save_path = save_root + title
+    if os.path.exists(save_path):
+        raise Exception('Error: Snapshot save path conflict')
 
     print('Saving snapshot into %s . . .' % save_path)
     print('Producing snapshots . . .')
@@ -174,24 +174,31 @@ def snapshot(host, save_path, title_arg=None, keyspace_arg=None, table_arg=None)
         print('Saved keyspace schema as %s' % print_save_path)
         pass
 
+    print('Compressing snapshot file')
+    zip_snapshot(save_path, save_root)
+
     print('\nProcess complete. Snapshot stored in %s\n' % save_path)
+
+
+def zip_snapshot(src, dest):
+    zipf = zipfile.ZipFile(dest + get_rpc_address() + '.zip',
+                           'w', zipfile.ZIP_DEFLATED)
+
+    zipf.write(os.path.abspath(src), 
+    for root, dirs, files in os.walk(src):
+        for f in files:
+            absname = os.path.abspath(os.path.join(root, f))
+            arcname = absname[len(src) + 1:]
+            zipf.write(absname, arcname)
+            #os.path.join(root, files))
+    zipf.close()
 
 
 if __name__ == '__main__':
     cmds = parse_cmd()
 
-    if cmds.path.endswith('\\') or cmds.path.endswith('/'):
-        save_path = cmds.path
-    else:
-        save_path = cmds.path + '/'
-    
-    if cmds.node:
-        host = cmds.node
-    else:
-        host = 'localhost'
-
     start = time.time()    
-    snapshot(host, save_path, cmds.title, cmds.keyspace, cmds.table)
+    snapshot(cmds.title, cmds.keyspace, cmds.table)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))
