@@ -32,45 +32,6 @@ def parse_cmd():
     return parser.parse_args()
 
 
-def check_dir(folder):
-
-    if not os.path.isdir(folder):
-        raise argparse.ArgumentTypeError('Directory does not exist')
-
-    if os.access(folder, os.R_OK):
-        return folder
-    else:
-        raise argparse.ArgumentTypeError('Directory is not readable')
-
-
-def write_schema(host, save_path, keyspace = None):
-
-    if keyspace:
-        save_path = save_path + '/' + keyspace + '/'
-        filename = keyspace + '_schema.cql'
-        query = ("DESCRIBE KEYSPACE %s;" % keyspace)
-    else:
-        save_path = save_path + '/'
-        filename = 'schema.cql'
-        query = ("DESCRIBE SCHEMA;")
-
-    with open(save_path + '/' + filename, 'w') as f:
-        query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
-        cqlsh = subprocess.Popen(('/bin/cqlsh', host),
-                                  stdin=query_process.stdout, stdout=f)
-        cqlsh.wait()
-        query_process.stdout.close()
-
-    return (save_path + filename)
-
-
-def write_ring_info(save_path):
-    
-    with open(save_path + '/ring_info.txt', 'w') as f:
-        nodetool = subprocess.Popen(['nodetool', 'ring'], stdout=f)
-        nodetool.wait()
-
-
 def run_snapshot(title, keyspace=None, table=None):
 
     cmd = 'nodetool snapshot -t %s ' % title
@@ -166,16 +127,6 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
                           ss_title  = title)
             print('Storing %s in %s' % (tb, save_table_path))
             shutil.copytree(load_dir, save_table_path)
-
-    print('Saving schema . . .')
-    print_save_path = write_schema(host, save_path)
-    print('Saved schema as %s' % print_save_path)
-    for ks in keyspaces:
-        print_save_path = write_schema(host, save_path, ks)
-        print('Saved keyspace schema as %s' % print_save_path)
-
-    print('Saving ring information . . .')
-    write_ring_info(save_path)
 
     print('Compressing snapshot file')
     shutil.make_archive(save_path, 'zip', save_path)

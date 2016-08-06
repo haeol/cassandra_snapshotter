@@ -18,13 +18,15 @@ def write_ring_info(save_path):
 def write_schema(host, save_path, keyspace=None):
 
     if keyspace:
-        save_path = save_path + '/' + keyspace + '/'
+        save_path = save_path + '/' + keyspace
         filename = keyspace + '_schema.cql'
         query = ("DESCRIBE KEYSPACE %s;" % keyspace)
     else:
-        save_path = save_path + '/'
         filename = 'schema.cql'
         query = ("DESCRIBE SCHEMA;")
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     with open(save_path + '/' + filename, 'w') as f:
         query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
@@ -33,7 +35,7 @@ def write_schema(host, save_path, keyspace=None):
         cqlsh.wait()
         query_process.stdout.close()
 
-    return (save_path + filename)
+    return (save_path + '/' + filename)
 
 
 def save_schema():
@@ -50,10 +52,7 @@ def save_schema():
         print('Saved keyspace schema as %s' % print_save_path)
 
     print('Saving ring information . . .')
-    write_ring_info(save_path)
-
-    print('Compressing schemas')
-    shutil.make_archive(save_path, 'zip', save_path)
+    write_ring_info(sys.path[0] + '/.snapshots')
 
 
 if __name__ == '__main__':
