@@ -19,7 +19,9 @@
     register: node_schema
 
   - name: check for cassandra_snapshotter in this directory
-    local_action: stat path="{{ playbook_dir }}/snapshotter/"
+    local_action: >
+      stat
+      path="{{ playbook_dir }}/snapshotter/"
     register: cassandra_snapshotter
     when: node_snapshot.stat.exists == False
 
@@ -31,18 +33,18 @@
             (node_schema.stat.exists   == False) ) and
           (cassandra_snapshotter.stat.exists == False)
 
-  - name: Delete old snapshotter files
+  - name: Delete old snapshotter files (--reset)
     file:
       path: "{{ host_snapshotter_directory }}"
       state: absent
+    when: "{{ reset }}"
 
-    # TODO conditional
-  - name: Copy cassandra snapshotter if it does not exist into node ~/ansible_playbook
+  - name: Copy cassandra snapshotter to nodes
     copy:
       src: "{{ playbook_dir }}/snapshotter"
       dest: ~/ansible_playbook
       force: yes
-    #when: node_snapshot.stat.exists == False
+    when: node_snapshot.stat.exists == False or "{{ reset }}"
 
   - name: check if pyyaml installed
     command: python -c "import yaml"
@@ -51,7 +53,7 @@
 
   - name: import error
     pip: name=pyyaml version=3.11
-    sudo: yes
+    become: true
     when: pyyaml.rc != 0
 
   - name: Run save schema on one machine
@@ -78,20 +80,15 @@
     ignore_errors: yes
 
   - name: Writing output to file
-    local_action: copy content="{{ output.stdout }}" dest="{{ playbook_dir }}/output_logs/output-{{ inventory_hostname }}.txt" force=yes
+    local_action: >
+      copy
+      content="{{ output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/output-{{ inventory_hostname }}.txt"
+      force=yes
 
   - fail:
       msg: "Error in running snapshotter, output located in ./output_logs/{{ inventory_hostname }}.txt"
     when: output.rc != 0
-
-  - stat:
-      path: "{{ save_snapshot_directory }}"
-    register: local_snapshot
-
-#  - name: Create local snapshot directory if one does not exist
-#    local_action:
-#      file: path=./snapshots state=directory
-#    when: local_snapshot.stat.exists == False
 
   - name: Retrieve node snapshots
     fetch:

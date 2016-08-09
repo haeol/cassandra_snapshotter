@@ -33,6 +33,11 @@ def parse_cmd():
                         required=False,
                         help='Enter title/name for snapshot'
     )
+    parser.add_argument('--reset',
+                        required=False,
+                        action='store_true',
+                        help='Reset the snapshotter files in the nodes'
+    )
     return parser.parse_args()
 
 
@@ -74,15 +79,13 @@ def ansible_snapshot(cmds):
     else:
         title = str(time.time()).split('.')[0]
 
-    # remove None values and path
     if cmds['path']:
         save_path = cmds['path']
     else:
         save_path = sys.path[0] + '/snapshots'
-        if not os.path.isdir(save_path):
-            os.makedirs(save_path)
-
+        make_directory(save_path)
     temp_path = sys.path[0] + '/.temp'
+    
     zipfile = save_path + '/' + title + '.zip'
     if os.path.isfile(zipfile):
         raise Exception('%s has already been created' % zipfile)
@@ -97,6 +100,7 @@ def ansible_snapshot(cmds):
                 os.remove(temp_path + '/' + f)
     os.makedirs(temp_path + '/' + title)
 
+    # remove None values and path argument
     playbook_args = dict((key, value) for key, value in cmds.iteritems()
                         if value != None and key != 'path' and key != 'title')
     playbook_args['path'] = temp_path + '/' + title
@@ -107,8 +111,9 @@ def ansible_snapshot(cmds):
     else:
         zipdir(temp_path + '/' + title, save_path, title)
 
-    print('Process complete, output logs saved in %s' %
-         (sys.path[0] + '/output_logs'))
+    print('Process complete.')
+    print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
+    print('Snapshot zip saved in %s' % save_path)
 
 
 if __name__ == '__main__':
