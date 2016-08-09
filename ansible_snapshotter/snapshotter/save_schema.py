@@ -51,6 +51,9 @@ def save_schema():
         print_save_path = write_schema(host, save_path, ks)
         print('Saved keyspace schema as %s' % print_save_path)
 
+    print('Compressing schema file')                                             
+    shutil.make_archive(save_path, 'zip', save_path) 
+
     print('Saving ring information . . .')
     write_ring_info(sys.path[0] + '/.snapshots')
 
