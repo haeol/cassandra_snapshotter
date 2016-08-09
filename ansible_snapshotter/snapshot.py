@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import zipfile
+import shutil
 
 from ansible_wrapper import run_playbook
 
@@ -73,7 +74,11 @@ def ansible_snapshot(cmds):
                         if value != None and key != 'path' and key != 'title')
     playbook_args['path'] = save_path
 
-    run_playbook('snapshot.yml', playbook_args)
+    return_code = run_playbook('snapshot.yml', playbook_args)
+    if return_code != 0:
+        shutil.rmtree(save_path)
+    else:
+        shutil.make_archive(save_path, 'zip', save_path)
 
 
 if __name__ == '__main__':
