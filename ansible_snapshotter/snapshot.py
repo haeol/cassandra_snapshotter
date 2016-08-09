@@ -5,7 +5,7 @@ import time
 import zipfile
 import shutil
 
-from ansible_wrapper import run_playbook
+from utils import (run_playbook, clean_dir, make_dir, check_dir, zip_dir)
 
 def parse_cmd():
 
@@ -41,37 +41,6 @@ def parse_cmd():
     return parser.parse_args()
 
 
-def check_dir(folder):
-
-    if not os.path.isdir(folder):
-        raise argparse.ArgumentTypeError('Directory does not exist')
-    if os.access(folder, os.R_OK):
-        return folder
-    else:
-        raise argparse.ArgumentTypeError('Directory is not readable')
-
-
-def zipdir(root_path, save_path, title):
-
-    zipf = zipfile.ZipFile(save_path + '/' + title + '.zip',
-                           'w', zipfile.ZIP_DEFLATED)
-    rootlength = len(root_path)
-    for root, dirs, files in os.walk(root_path):
-        for f in files:
-            filename = os.path.join(root_path, f)
-            zipf.write(filename, filename[rootlength:])
-
-
-def make_directory(path):
-
-    exists = False
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    else:
-        exists = True
-    return exists
-
-
 def ansible_snapshot(cmds):
 
     if cmds['title']:
@@ -83,21 +52,17 @@ def ansible_snapshot(cmds):
         save_path = cmds['path']
     else:
         save_path = sys.path[0] + '/snapshots'
-        make_directory(save_path)
+        make_dir(save_path)
     temp_path = sys.path[0] + '/.temp'
     
     zipfile = save_path + '/' + title + '.zip'
     if os.path.isfile(zipfile):
         raise Exception('%s has already been created' % zipfile)
 
-    make_directory(save_path)
-    make_directory(sys.path[0] + '/output_logs')
-    if make_directory(temp_path):
-        for f in os.listdir(temp_path):
-            if os.path.isdir(temp_path + '/' + f):
-                shutil.rmtree(temp_path + '/' + f)
-            else:
-                os.remove(temp_path + '/' + f)
+    make_dir(save_path)
+    make_dir(sys.path[0] + '/output_logs')
+    if make_dir(temp_path):
+        clean_dir(temp_path)
     os.makedirs(temp_path + '/' + title)
 
     # remove None values and path argument
@@ -109,7 +74,7 @@ def ansible_snapshot(cmds):
     if return_code != 0:
         shutil.rmtree(temp_path + '/' + title)
     else:
-        zipdir(temp_path + '/' + title, save_path, title)
+        zip_dir(temp_path + '/' + title, save_path, title)
 
     print('Process complete.')
     print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
