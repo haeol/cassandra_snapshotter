@@ -67,6 +67,7 @@ def get_keyspaces(host, system=False):
         keyspaces = keyspaces - _SYSTEM_KEYSPACES
     return keyspaces
 
+
 def get_table_directories(host, keyspace):
     # This function calls Cassandra to retrieve the tables and their
     # corresponding uuid
