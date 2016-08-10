@@ -2,7 +2,6 @@ import argparse
 import os
 import sys
 import time
-import zipfile
 import shutil
 
 from utils import (run_playbook, clean_dir, make_dir, check_dir, zip_dir)
@@ -53,14 +52,15 @@ def ansible_snapshot(cmds):
     else:
         save_path = sys.path[0] + '/snapshots'
         make_dir(save_path)
-    temp_path = sys.path[0] + '/.temp'
     
-    zipfile = save_path + '/' + title + '.zip'
-    if os.path.isfile(zipfile):
-        raise Exception('%s has already been created' % zipfile)
+    if os.path.isfile(save_path + '/' + title + '.zip'):
+        raise Exception('%s has already been created' %
+                        save_path + '/' + title + '.zip')
 
-    make_dir(save_path)
-    make_dir(sys.path[0] + '/output_logs')
+    if make_dir(sys.path[0] + '/output_logs'):
+        clean_dir(sys.path[0] + '/output_logs')
+
+    temp_path = sys.path[0] + '/.temp'
     if make_dir(temp_path):
         clean_dir(temp_path)
     os.makedirs(temp_path + '/' + title)

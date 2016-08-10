@@ -1,0 +1,98 @@
+
+---
+- hosts: "{{ nodes }}"
+
+  vars:
+    # extra-vars are nodes, path, reset
+    host_snapshotter_directory: "~/ansible_playbook/snapshotter"
+    load_snapshot_directory: "{{ path }}"
+
+  tasks:
+
+  - name: Delete old snapshotter files (--reset)
+    file:
+      path: "{{ host_snapshotter_directory }}"
+      state: absent
+    when: reset
+
+  - name: Copy cassandra snapshotter to nodes (--reset)
+    copy:
+      src: "{{ playbook_dir }}/snapshotter"
+      dest: ~/ansible_playbook
+      force: yes
+    when: reset # or node_snapshot.stat.exists == False
+
+  - name: check if pyyaml installed
+    command: python -c "import yaml"
+    register: pyyaml
+    ignore_errors: True
+
+  - name: import error
+    pip: name=pyyaml version=3.11
+    become: true
+    when: pyyaml.rc != 0
+
+
+    # TODO run destroy schema on one machine
+    # destroy all old files in all machines
+    # create schema in one machine
+    # wait for sync
+    # load buckets in all machines
+
+  - name: Run destroy schema on one machine
+    command: "python {{ host_snapshotter_directory }}/destroy.py"
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
+
+  - name: Clean all old files in all machines
+    command: "python {{ host_snapshotter_directory }}/cleaner.py"
+
+  - name: Clear temporary snapshot folder in nodes
+    file:
+      path: "{{ host_snapshotter_directory }}"
+      state: empty
+
+  - name: Copy snapshot files to respective nodes
+    copy:
+      src: "{{ load_snapshot_directory }}"
+      dest: "{{ host_snapshotter_directory }}/.snapshots"
+
+
+#  - name: Restore schema 
+#
+#  - name: Fetch save_schema from machine
+#    fetch:
+#      src: "{{ host_snapshotter_directory }}/.snapshots/{{ item }}"
+#      dest: "{{ save_snapshot_directory }}"
+#      flat: yes
+#      fail_on_missing: yes
+#    with_items:
+#      - "ring_info.txt"
+#      - "schemas.zip"
+#    run_once: true
+#    delegate_to: "{{ play_hosts[0] }}"
+#
+#
+#  - name: Run snapshotter on all nodes
+#    command: "python {{ host_snapshotter_directory }}/snapshotter.py"
+#    register: output
+#    ignore_errors: yes
+#
+#  - name: Writing output to file
+#    local_action: >
+#      copy
+#      content="{{ output.stdout }}"
+#      dest="{{ playbook_dir }}/output_logs/output-{{ inventory_hostname }}.txt"
+#      force=yes
+#
+#  - fail:
+#      msg: "Error in running snapshotter, output located in ./output_logs/{{ inventory_hostname }}.txt"
+#    when: output.rc != 0
+#
+#  - name: Retrieve node snapshots
+#    fetch:
+#      src: "{{ host_snapshotter_directory }}/.snapshots/{{ inventory_hostname }}.zip"
+#      dest: "{{ save_snapshot_directory }}"
+#      fail_on_missing: yes
+#      flat: yes
+#
