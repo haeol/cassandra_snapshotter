@@ -1,6 +1,7 @@
 import yaml
 import os
 import subprocess
+import re
 
 _SYSTEM_KEYSPACES = set(['system_schema',
                          'system_auth',
@@ -13,7 +14,7 @@ _YAML_LOCATIONS = ['/etc/cassandra/conf/', # package install on centos
                    '/etc/dse/cassandra/'   # datastax enterprise package
                   ] #TODO tarball install needs install location
 
-def cassandra_query(host, query, output=True):
+def cassandra_query(host, query, test=False):
     # This function takes in a cassandra query and returns the output
 
     if type(query) is str:
@@ -26,13 +27,16 @@ def cassandra_query(host, query, output=True):
                              stdin=query_process.stdout,
                              stdout=subprocess.PIPE)
     query_process.stdout.close()
+    output = cqlsh.communicate()[0]
+    query_process.wait()
+    if test:
+        output = cqlsh.returncode
+    return output
 
-    if output:
 
-        output = cqlsh.communicate()[0]
-        query_process.wait()
-        return output
-
+def check_host(host):
+    return cassandra_query(host, 'exit', test=True)
+    
 
 def get_yaml_var(var):
     # This function uses cassandra.yaml to find a specific variable in it
@@ -74,7 +78,7 @@ def get_table_directories(host, keyspace):
 
     cmd = ("SELECT table_name, id FROM system_schema.tables \
             WHERE keyspace_name='%s';" % keyspace)
-    query = cassandra_query(host, cmd).split('\n')
+    query = cassandra_query(host, cmd)
 
     # format of query is as follows, may need to be updated
     '''
@@ -88,15 +92,12 @@ def get_table_directories(host, keyspace):
     (num rows)
     '''
 
-    table_directory = {}
-
-    query = query[3:-3] #TODO check if before and after match regex?
-
-    for row in query:
-
-        table, uuid = row.strip().split(' | ')
-        uuid = uuid.replace('-', '')
-        table_directory[table] = table + '-' + uuid
+    # finds table and uuid; could be more efficient?
+    matcher = '(\w{1,})\ \|\ ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+    r = re.compile(matcher)
+    table_directory = dict(re.findall(r, query))
+    for table, uuid in table_directory.iteritems(): # strip '-' from uuid
+        table_directory[table] = table + '-' + uuid.replace('-', '')
 
     return table_directory
 
