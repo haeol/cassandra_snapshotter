@@ -3,28 +3,17 @@ import sys
 import shutil
 import argparse
 
-from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
-                            get_table_directories, get_dir_structure,
-                            _SYSTEM_KEYSPACES)
+from cass_functions import (_SYSTEM_KEYSPACES, cassandra_query, check_host,
+                            get_data_dir, get_keyspaces, get_rpc_address,
+                            get_table_directories, get_dir_structure)
 
-def parse_cmd():
-
-    parser = argparse.ArgumentParser(description='Cleaner')
-
-    parser.add_argument('-n', '--node', '--host',
-                        required=False,
-                        help='Specify local host/node ip'
-    )
-    return parser.parse_args()
-
-
-def data_cleaner(host='localhost', backups=False):
+def data_cleaner(host, backups=False):
     # This fuction finds inactive data directories and removes them
     # This includes unused keyspace directories and table directories
 
-    keyspaces = get_keyspaces(host, system=True)
-    if len(keyspaces) == 0: # there should always be system keyspaces
+    if check_host(host) != 0:
         raise Exception('Invalid host parameter')
+    keyspaces = get_keyspaces(host)
     structure = get_dir_structure(host, keyspaces)
     cass_data_dir = get_data_dir()
 
@@ -67,13 +56,6 @@ def clean_directory(table_directory):
 
 if __name__ == '__main__':
 
-    cmds = parse_cmd()
-
-    if cmds.node:
-        host = cmds.node
-    else:
-        host = 'localhost'
-
-    data_cleaner(host) #TODO backups option?
+    data_cleaner(get_rpc_address(), backups=True)
 
 

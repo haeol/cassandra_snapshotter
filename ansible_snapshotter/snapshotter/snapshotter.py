@@ -8,7 +8,7 @@ import time
 import zipfile
 
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
-                            get_rpc_address, cassandra_query)
+                            get_rpc_address, cassandra_query, check_host)
 
 # nodetool only works with localhost, cqlsh only works with the node's ip
 
@@ -51,21 +51,25 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     title = host
     save_root = sys.path[0] + '/.snapshots/'
 
-    # skip checking cassandra, ansible does it for us
-
+    if check_host(host) != 0:
+        print("ERROR: Invalid host, check rpc_address in this node's yaml file")
+        exit(1)
+        #raise Exception("Invalid host, check rpc_address in this node's yaml file")
     keyspaces = get_keyspaces(host) # set of keyspaces
     if len(keyspaces) == 0: # edge case
-        raise Exception('No keyspaces to snapshot. If Connection Error, ' +
-              'error with rpc_address host (found in cassandra.yaml)')
+        print('ERROR: No keyspaces found')
+        exit(1)
+        #raise Exception('No keyspaces to snapshot.')
 
     # timestamp name in remote storage, all snapshot names by rpc_address
 
-    # TODO check args for every host? should be fine because different threads
     print('Checking keyspace arguments . . .')
     if keyspace_arg: # checks if keyspace argument exists in database
         for ks in keyspace_arg:
             if ks not in keyspaces:
-                raise Exception('Keyspace "%s" not found.' % ks)
+                print('ERROR: Keyspaces "%s" not found.' % ks)
+                exit(1)
+                #raise Exception('Keyspace "%s" not found.' % ks)
         else:
             keyspaces = set(keyspace_arg)
     else:
@@ -75,11 +79,15 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     print('Checking table arguments . . .')
     if table_arg:
         if not keyspace_arg or len(keyspace_arg) != 1:
-            raise Exception('Only one keyspace can be specified with table arg')
+            print('ERROR: Only one keyspace can be specified with table arg')
+            exit(1)
+            #raise Exception('Only one keyspace can be specified with table arg')
         ks = next(iter(keyspaces)) # retrieve only element in set
         for tb in table_arg:
             if tb not in structure[ks]:
-                raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
+                print('ERROR: Table "%s" not found in keyspace "%s"' % (tb, ks))
+                exit(1)
+                #raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
         else:
             tables = set(table_arg)
     else:
@@ -97,7 +105,9 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
 
     save_path = save_root + title
     if os.path.exists(save_path):
-        raise Exception('Error: Snapshot save path conflict')
+        print('ERROR: Snapshot save path conflict')
+        exit(1)
+        #raise Exception('Error: Snapshot save path conflict')
 
     print('Saving snapshot into %s . . .' % save_path)
     print('Producing snapshots . . .')
