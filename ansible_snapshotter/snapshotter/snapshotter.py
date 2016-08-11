@@ -52,9 +52,9 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     save_root = sys.path[0] + '/.snapshots/'
 
     if check_host(host) != 0:
-        print("ERROR: Invalid host, check rpc_address in this node's yaml file")
+        print('ERROR: Invalid host, check rpc_address in this node\'s yaml file')
         exit(1)
-        #raise Exception("Invalid host, check rpc_address in this node's yaml file")
+        #raise Exception('Invalid host, check rpc_address in this node\'s yaml file')
     keyspaces = get_keyspaces(host) # set of keyspaces
     if len(keyspaces) == 0: # edge case
         print('ERROR: No keyspaces found')

@@ -1,3 +1,4 @@
+import argparse
 import os                                                                        
 import sys                                                                       
 import subprocess                                                                
@@ -6,6 +7,16 @@ import zipfile
                                                                                  
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,      
                             get_rpc_address, cassandra_query)  
+
+def parse_cmd():
+
+    parser = argparse.ArgumentParser(description='Cassandra Schema Saver')
+    parser.add_argument('-k', '-ks', '--keyspace',
+                        required=False,
+                        nargs='+',
+                        help='Specify a keyspace'
+    )
+    return parser.parse_args()
 
 
 def write_ring_info(save_path):
@@ -20,10 +31,10 @@ def write_schema(host, save_path, keyspace=None):
     if keyspace:
         save_path = save_path + '/' + keyspace
         filename = keyspace + '_schema.cql'
-        query = ("DESCRIBE KEYSPACE %s;" % keyspace)
+        query = 'DESCRIBE KEYSPACE %s;' % keyspace
     else:
         filename = 'schema.cql'
-        query = ("DESCRIBE SCHEMA;")
+        query = 'DESCRIBE SCHEMA;'
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -38,11 +49,17 @@ def write_schema(host, save_path, keyspace=None):
     return (save_path + '/' + filename)
 
 
-def save_schema():
+def save_schema(keyspace_arg=None):
 
     host = get_rpc_address()
     save_path = sys.path[0] + '/.snapshots/schemas'
     keyspaces = get_keyspaces(host)
+    if keyspace_arg:
+        for ks in keyspace_arg:
+            if ks not in keyspaces:
+                print('ERROR: Invalid keyspace argument')
+                exit(1)
+                #raise Exception('Invalid keyspace argument')
 
     print('Saving schema . . .')
     print_save_path = write_schema(host, save_path)
@@ -59,4 +76,5 @@ def save_schema():
 
 
 if __name__ == '__main__':
-    save_schema()
+    cmds = parse_cmd()
+    save_schema(cmds.keyspace)

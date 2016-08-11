@@ -40,3 +40,5 @@ def load_schema(save_path, keyspace = None):
 
     return (save_path + filename)
 
+if __name__ == '__main__':
+    load_schema(

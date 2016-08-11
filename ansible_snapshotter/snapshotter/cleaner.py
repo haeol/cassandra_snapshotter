@@ -47,12 +47,12 @@ def data_cleaner(host, backups=False):
                     clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
 
 
-def clean_directory(table_directory):                                            
-    # TODO does incremental backups work with this?                              
-    for f in os.listdir(table_directory):                                        
-        if f.endswith('.db') or f.endswith('.crc32') or f.endswith('.txt'):                              
-            os.remove(table_directory + '/' + f)                                 
-                                                
+def clean_directory(table_directory):
+    # TODO does incremental backups work with this?
+    for f in os.listdir(table_directory):
+        if os.isfile(f):
+            os.remove(table_directory + '/' + f)
+
 
 if __name__ == '__main__':
 

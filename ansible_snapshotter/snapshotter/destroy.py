@@ -2,8 +2,6 @@ from cass_functions import cassandra_query, get_keyspaces, get_rpc_address
 
 def destroy_schema(host):
 
-    success = False
-    destroy = False
     keyspaces = get_keyspaces(host)
 
     for k in keyspaces:
