@@ -2,24 +2,24 @@
 - hosts: "{{ nodes }}"
 
   vars:
-    # extra-vars are nodes, path, reset
+    # extra-vars are nodes, path, reload
     host_snapshotter_directory: "~/ansible_playbook/snapshotter"
     save_snapshot_directory: "{{ path }}"
 
   tasks:
 
-  - name: Delete old snapshotter files (--reset)
+  - name: Delete old snapshotter files (--reload)
     file:
       path: "{{ host_snapshotter_directory }}"
       state: absent
-    when: reset
+    when: reload
 
-  - name: Copy cassandra snapshotter to nodes (--reset)
+  - name: Copy cassandra snapshotter to nodes (--reload)
     copy:
       src: "{{ playbook_dir }}/snapshotter"
       dest: ~/ansible_playbook
       force: yes
-    when: reset # or node_snapshot.stat.exists == False
+    when: reload
 
   - name: check if pyyaml installed
     command: python -c "import yaml"
@@ -32,9 +32,26 @@
     when: pyyaml.rc != 0
 
   - name: Run save schema on one machine
-    command: "python {{ host_snapshotter_directory }}/save_schema.py"
+    command: "python {{ host_snapshotter_directory }}/{{ save_schema_command }}"
+    register: schema_output
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
+    ignore_errors: yes
+
+  - name: Write schema output to file
+    local_action: >
+      copy
+      content="{{ schema_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/output_schema-{{ inventory_hostname }}.txt"
+      force=yes
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
+
+  - fail:
+      msg: > 
+        "Error in running save_schema, script output located in"
+        "./output_logs/output_schema-{{ inventory_hostname }}.txt"
+    when: schema_output.rc != 0
 
   - name: Fetch save_schema from machine
     fetch:
@@ -50,7 +67,7 @@
 
 
   - name: Run snapshotter on all nodes
-    command: "python {{ host_snapshotter_directory }}/snapshotter.py"
+    command: "python {{ host_snapshotter_directory }}/{{ snapshotter_command }}"
     register: output
     ignore_errors: yes
 
@@ -62,7 +79,9 @@
       force=yes
 
   - fail:
-      msg: "Error in running snapshotter, output located in ./output_logs/{{ inventory_hostname }}.txt"
+      msg: >
+        "Error in running snapshotter, script output located in"
+        "./output_logs/{{ inventory_hostname }}.txt"
     when: output.rc != 0
 
   - name: Retrieve node snapshots

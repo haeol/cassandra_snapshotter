@@ -1,26 +1,24 @@
-
 ---
 - hosts: "{{ nodes }}"
 
   vars:
-    # extra-vars are nodes, path, reset
+    # extra-vars are nodes, reload
     host_snapshotter_directory: "~/ansible_playbook/snapshotter"
-    load_snapshot_directory: "{{ path }}"
 
   tasks:
 
-  - name: Delete old snapshotter files (--reset)
+  - name: Delete old snapshotter files (--reload)
     file:
       path: "{{ host_snapshotter_directory }}"
       state: absent
-    when: reset
+    when: reload
 
-  - name: Copy cassandra snapshotter to nodes (--reset)
+  - name: Copy cassandra snapshotter to nodes (--reload)
     copy:
       src: "{{ playbook_dir }}/snapshotter"
       dest: ~/ansible_playbook
       force: yes
-    when: reset # or node_snapshot.stat.exists == False
+    when: reload # or node_snapshot.stat.exists == False
 
   - name: check if pyyaml installed
     command: python -c "import yaml"
@@ -32,7 +30,7 @@
     become: true
     when: pyyaml.rc != 0
 
-
+    # TODO hard reset cassandra
     # TODO run destroy schema on one machine
     # destroy all old files in all machines
     # create schema in one machine
@@ -43,19 +41,69 @@
     command: "python {{ host_snapshotter_directory }}/destroy.py"
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
+    register: destroy_output
+    
+  - name: Write destroy.py output to file
+    local_action: >
+      copy
+      content="{{ destroy_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/output_destroy-{{ inventory_hostname }}.txt"
+      force=yes
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
 
   - name: Clean all old files in all machines
     command: "python {{ host_snapshotter_directory }}/cleaner.py"
+    register: cleaner_output
 
-  - name: Clear temporary snapshot folder in nodes
+  - name: Writing output to file
+    local_action: >
+      copy
+      content="{{ cleaner_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/cleaner_output-{{ inventory_hostname }}.txt"
+      force=yes
+
+  - name: Clear .snapshots folder in nodes
     file:
-      path: "{{ host_snapshotter_directory }}"
-      state: empty
+      path: "{{ host_snapshotter_directory }}/.temp"
+      state: absent
+
+  - name: Create .snapshots folder in nodes if did not exist
+    file:
+      path: "{{ host_snapshotter_directory }}/.temp"
+      state: directory
+
+  - name: Clear .temp folder in nodes
+    file:
+      path: "{{ host_snapshotter_directory }}/.temp"
+      state: absent
+
+  - name: Create .temp folder in nodes if did not exist
+    file:
+      path: "{{ host_snapshotter_directory }}/.temp"
+      state: directory
+
+  - name: Copy schema file to one machine
+    copy:
+      src: "{{ playbook_dir }}/.temp/schemas.zip"
+      dest: "{{ host_snapshotter_directory }}/.temp"
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
+
+  - pause:
+
+  - name: Restore schema in one machine
+    command: "python {{ host_snapshotter_directory }}/{{ load_schema_command }}"
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
 
   - name: Copy snapshot files to respective nodes
     copy:
-      src: "{{ load_snapshot_directory }}"
+      src: "{{ playbook_dir }}/.temp/{{ inventory_hostname }}.zip"
       dest: "{{ host_snapshotter_directory }}/.snapshots"
+
+  - name: Load snapshot files in all machines
+    command: "python {{ host_snapshotter_directory }}/{{ restore_command}} -h {{ play_hosts }}"
 
 
 #  - name: Restore schema 

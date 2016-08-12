@@ -1,22 +1,21 @@
 import argparse
 import os
 import sys
-
+import re
 import zipfile
 
 from utils import *
 
 def parse_cmd():
 
-    parser = argparse.ArgumentParser(description='Ansible Cassandra Snapshotter')
+    parser = argparse.ArgumentParser(description='Ansible Cassandra Restorer')
     parser.add_argument('-d', '--path',
                         type=check_file,
-                        required=False,
+                        required=True,
                         help='Specify a path to the snapshot zip file'
     )
     parser.add_argument('-n', '--nodes', '--hosts',
-                        required=False,
-                        nargs='+',
+                        required=True,
                         help='Enter the host IPs'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
@@ -29,9 +28,10 @@ def parse_cmd():
                         nargs='+',
                         help='Enter table(s) corresponding to a single keyspace'
     )
-    parser.add_argument('-t', '--title', '--tag', '--name',
+    parser.add_argument('--reload',
                         required=False,
-                        help='Enter title/name for snapshot'
+                        action='store_true',
+                        help='Reset the snapshotter files in the nodes'
     )
     return parser.parse_args()
 
@@ -41,7 +41,10 @@ def check_file(f):
     if not os.path.isfile(f):
         raise argparse.ArgumentTypeError('File does not exist')
     if os.access(f, os.R_OK):
-        return f
+        if zipfile.is_zipfile(f):
+            return f
+        else:
+            raise argparse.ArgumentTypeError('File is not a zip file')
     else:
         raise argparse.ArgumentTypeError('File is not readable')
 
@@ -54,8 +57,8 @@ def schema_parser(path):
 
 def ansible_restore(cmds):
     
-    if cmds['path']:
-        zip_path = cmds['path']
+    if cmds.path:
+        zip_path = cmds.path
     else:
         # option to select from snapshots based on date last modified
         raise Exception('No file specified.')
@@ -72,24 +75,66 @@ def ansible_restore(cmds):
     print('Unzipping snapshot file')
     z = zipfile.ZipFile(zip_path, 'r')
     z.extractall(temp_path)
-    exit(0)
 
-    # TODO check snapshot files by regex on schema in zip
+    # check args
+    archive = zipfile.ZipFile(temp_path + '/schemas.zip', 'r')
+    schema_cql = archive.read('schema.cql')
 
+    matcher = 'CREATE TABLE (\w{1,})\.(\w{1,})'
+    r = re.compile(matcher)
 
-    # remove None values and path
-    playbook_args = dict((key, value) for key, value in cmds.iteritems()
-                        if value != None and key != 'path')
+    schema = {}
+    for ks, tb in re.findall(r, schema_cql):
 
+        if ks in schema:
+            schema[ks].add(tb)
+        else:
+            schema[ks] = set([tb])
+
+    print('Checking arguments . . .')
+    restore_command = 'restore.py '
+    load_schema_command = 'load_schema.py '
+    if cmds.keyspace:
+
+        for keyspace in cmds.keyspace:
+            if keyspace not in schema.keys():
+                raise Exception('Keyspace "%s" not in snapshot schema' % keyspace)
+
+        keyspace_arg = '-ks ' + ' '.join(cmds.keyspace)
+        restore_command += keyspace_arg
+        load_schema_command += keyspace_arg
+                
+        if cmds.table:
+
+            if len(cmds.keyspace) != 1:
+                raise Exception('ERROR: One keyspace must be specified with table argument')
+
+            ks = cmds.keyspace[0]
+            for tb in cmds.table:
+                if tb not in schema[ks]:
+                    raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
+
+            restore_command += ' -tb ' + ' '.join(cmds.table)
+
+    elif cmds.table:
+        raise Exception('ERROR: Keyspace must be specified with tables')
+
+    playbook_args = {
+        'nodes': cmds.nodes,
+        'restore_command' : restore_command,
+        'load_schema_command' : load_schema_command,
+        'reload' : cmds.reload
+    }
+    return_code = run_playbook('restore.yml', playbook_args)
     
+    if return_code != 0:
+        print('ERROR: Ansible script failed to run properly. ' +
+              'If this persists, try --hard-reset.')
+    else:
+        print('Process complete.')
+        print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
     
-    
-
-
-
-
-
 
 if __name__ == '__main__':
     cmds = parse_cmd()
-    ansible_restore(vars(cmds))
+    ansible_restore(cmds)

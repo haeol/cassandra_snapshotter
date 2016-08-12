@@ -32,7 +32,7 @@ def parse_cmd():
                         required=False,
                         help='Enter title/name for snapshot'
     )
-    parser.add_argument('--reset',
+    parser.add_argument('--reload',
                         required=False,
                         action='store_true',
                         help='Reset the snapshotter files in the nodes'
@@ -42,13 +42,15 @@ def parse_cmd():
 
 def ansible_snapshot(cmds):
 
-    if cmds['title']:
-        title = cmds['title']
+    # set title of snapshot file
+    if cmds.title:
+        title = cmds.title
     else:
         title = str(time.time()).split('.')[0]
 
-    if cmds['path']:
-        save_path = cmds['path']
+    # path to save snapshot in
+    if cmds.path:
+        save_path = cmds.path
     else:
         save_path = sys.path[0] + '/snapshots'
         make_dir(save_path)
@@ -57,6 +59,7 @@ def ansible_snapshot(cmds):
         raise Exception('%s has already been created' %
                         save_path + '/' + title + '.zip')
 
+    # create working directories
     if make_dir(sys.path[0] + '/output_logs'):
         clean_dir(sys.path[0] + '/output_logs')
 
@@ -65,23 +68,52 @@ def ansible_snapshot(cmds):
         clean_dir(temp_path)
     os.makedirs(temp_path + '/' + title)
 
-    # remove None values and path argument
+    '''
+    # remove None values, path argument, and title arg
     playbook_args = dict((key, value) for key, value in cmds.iteritems()
                         if value != None and key != 'path' and key != 'title')
-    playbook_args['path'] = temp_path + '/' + title
+    playbook_args['path'] = temp_path + '/' + title # temp storage of snapshot
+    '''
 
+    # check keyspace and table args
+    snapshotter_command = 'snapshotter.py '
+    save_schema_command = 'save_schema.py '
+    if cmds.keyspace:
+
+        keyspace_arg = '-ks ' + ' '.join(cmds.keyspace)
+        snapshotter_command += keyspace_arg
+        save_schema_command += keyspace_arg
+
+        if cmds.table:
+            if len(cmds.keyspace) != 1:
+                raise Exception('ERROR: One keyspace must be specified with table argument')
+            snapshotter_command += ' -tb ' + ' '.join(cmds.table)
+
+    elif cmds.table:
+        raise Exception('ERROR: Keyspace must be specified with tables')
+
+    playbook_args = {
+        'nodes' : cmds.nodes,
+        'snapshotter_command' : snapshotter_command,
+        'save_schema_command' : save_schema_command,
+        'path' : temp_path + '/' + title,
+        'reload' : cmds.reload
+    }
+
+    # call playbook
     return_code = run_playbook('snapshot.yml', playbook_args)
+
     if return_code != 0:
         shutil.rmtree(temp_path + '/' + title)
+        print('Error running ansible script')
     else:
         zip_dir(temp_path + '/' + title, save_path, title)
-
-    print('Process complete.')
-    print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
-    print('Snapshot zip saved in %s' % save_path)
+        print('Process complete.')
+        print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
+        print('Snapshot zip saved in %s' % save_path)
 
 
 if __name__ == '__main__':
 
     cmds = parse_cmd()
-    ansible_snapshot(vars(cmds))
+    ansible_snapshot(cmds)
