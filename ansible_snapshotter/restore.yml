@@ -18,7 +18,7 @@
       src: "{{ playbook_dir }}/snapshotter"
       dest: ~/ansible_playbook
       force: yes
-    when: reload # or node_snapshot.stat.exists == False
+    when: reload
 
   - name: check if pyyaml installed
     command: python -c "import yaml"
