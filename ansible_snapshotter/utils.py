@@ -6,6 +6,9 @@ import shutil
 import zipfile
 import ConfigParser
 
+import boto3
+import botocore
+
 def run_playbook(play, args):
     # pass args as a dict
     
@@ -21,6 +24,41 @@ def run_playbook(play, args):
         cmd.append(json.dumps(args))
 
     return subprocess.call(cmd) # 0 success 1 fail
+
+
+def s3_bucket(s3_access_key, s3_secret_key, s3_region, s3_bucket):
+
+    # bucket.upload_file('path', 'key')
+    # bucket.download_file('key', 'path')
+    s3 = boto3.resource(
+        's3',
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key,
+        region_name=s3_region
+    )
+    bucket = s3.Bucket(s3_bucket)
+    
+    try:
+        s3.meta.client.head_bucket(Bucket=s3_bucket)
+    except botocore.exceptions.ClientError as e:
+        error_code = int(e.response['Error']['Code'])
+        if error_code == 404:
+            raise Exception('Bucket does not exist')
+        else:
+            raise e
+
+    return bucket
+
+
+def s3_delete_object(s3_bucket, key):
+    
+    return s3_bucket.delete_objects(
+        Delete={
+            'Objects': [
+                {'Key': key }
+            ]
+        }
+    )
 
 
 def clean_dir(path):

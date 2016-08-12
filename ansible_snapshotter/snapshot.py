@@ -3,8 +3,12 @@ import os
 import sys
 import time
 import shutil
+try:
+    from ConfigParser import ConfigParser
+except:
+    from configparser import ConfigParser # python3
 
-from utils import (run_playbook, clean_dir, make_dir, check_dir, zip_dir)
+from utils import (run_playbook, s3_bucket, clean_dir, make_dir, check_dir, zip_dir)
 
 def parse_cmd():
 
@@ -32,6 +36,11 @@ def parse_cmd():
                         required=False,
                         help='Enter title/name for snapshot'
     )
+    parser.add_argument('--s3',
+                        required=False,
+                        action='store_true',
+                        help='Store in s3 using config.ini settings'
+    )
     parser.add_argument('--reload',
                         required=False,
                         action='store_true',
@@ -47,6 +56,22 @@ def ansible_snapshot(cmds):
         title = cmds.title
     else:
         title = str(time.time()).split('.')[0]
+
+    if cmds.s3:
+        config = ConfigParser()
+        if len(config.read('config.ini')) == 0:
+            raise Exception('ERROR: Cannot find config.ini in script directory')
+        bucket = config.get('s3-aws-info', 'bucket')
+        region = config.get('s3-aws-info', 'region')
+        account = config.get('s3-aws-info', 'account')
+        password = config.get('s3-aws-info', 'password')
+        if not(bucket and region and account and password):
+            raise Exception('AWS arguments in config.ini not specified')
+        try:
+            s3 = s3_bucket(account, password, region, bucket)
+        except ValueError as e:
+            print('ERROR: Invalid config.ini options')
+            raise e
 
     # path to save snapshot in
     if cmds.path:
@@ -67,13 +92,6 @@ def ansible_snapshot(cmds):
     if make_dir(temp_path):
         clean_dir(temp_path)
     os.makedirs(temp_path + '/' + title)
-
-    '''
-    # remove None values, path argument, and title arg
-    playbook_args = dict((key, value) for key, value in cmds.iteritems()
-                        if value != None and key != 'path' and key != 'title')
-    playbook_args['path'] = temp_path + '/' + title # temp storage of snapshot
-    '''
 
     # check keyspace and table args
     snapshotter_command = 'snapshotter.py '
@@ -108,6 +126,18 @@ def ansible_snapshot(cmds):
         print('Error running ansible script')
     else:
         zip_dir(temp_path + '/' + title, save_path, title)
+        if cmds.s3:
+            file_size = os.path.getsize(save_path + '/' + title + '.zip')
+            options = set(['y', 'Y', 'n', 'N'])
+            confirm = ''
+            while confirm not in options:
+                confirm = str(raw_input('Snapshot size is %i bytes. Upload? [y/n] '
+                                         % file_size))
+            if confirm.lower() == 'y':
+                print('Uploading to s3 . . .')
+                key = 'cassandra-snapshot-' + title
+                s3.upload_file(save_path + '/' + title + '.zip', key)
+                print('Uploaded to bucket "%s" with key "%s"' % (bucket, key))
         print('Process complete.')
         print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
         print('Snapshot zip saved in %s' % save_path)
