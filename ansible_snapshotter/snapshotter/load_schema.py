@@ -10,35 +10,41 @@ import zipfile
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
                             get_rpc_address, cassandra_query)
 
+def parse_cmd():
 
-def load_schema(save_path, keyspace = None):
-    snapshot_root = sys.path[0] + '/.snapshots/'
+    parser = argparse.ArgumentParser(description='Cassandra Schema Loader')
+    parser.add_argument('-k', '-ks', '--keyspace',
+                        required=False,
+                        nargs='+',
+                        help='Specify a keyspace'
+    )
+    return parser.parse_args()
 
-    load_path = snapshot_root + cqlsh_host
-    print('Unzipping schema files')
-    os.mkdir(load_path)
-    zip_path = load_path + '.zip'
-    zipf = zipfile.ZipFile(zip_path, 'r')
-    zipf.extractall(load_path)
-    zipf.close()
+
+def _load(host, load_path):
+    
+    with open(load_path, 'r') as f:
+        cassandra_query(host, f.read())
+
+
+def load_schema(keyspace = None):
+
+    temp_path = sys.path[0] + '/.temp'
+    host = get_rpc_address()
+
+    # unzip schemas.zip
+    print('Unzipping schemas.zip')
+    z = zipfile.ZipFile(temp_path + '/schemas.zip', 'r')
+    z.extractall(temp_path)
 
     if keyspace:
-        save_path = save_path + '/' + keyspace + '/'
-        filename = keyspace + '_schema.cql'
-        query = ("DESCRIBE KEYSPACE %s;" % keyspace)
+        for ks in keyspace:
+            print('Loading keyspace: %s' % ks)
+            _load(host, temp_path + '/' + ks + '/' + ks + '_schema.cql')
     else:
-        save_path = save_path + '/'
-        filename = 'schema.cql'
-        query = ("DESCRIBE SCHEMA;")
-
-    with open(save_path + '/' + filename, 'w') as f:
-        query_process = subprocess.Popen(['echo', query], stdout=subprocess.PIPE)
-        cqlsh = subprocess.Popen(('/bin/cqlsh', host),
-                                  stdin=query_process.stdout, stdout=f)
-        cqlsh.wait()
-        query_process.stdout.close()
-
-    return (save_path + filename)
+        _load(host, temp_path + '/schema.cql') 
+        
 
 if __name__ == '__main__':
-    load_schema(
+    cmds = parse_cmd()
+    load_schema(cmds.keyspace)

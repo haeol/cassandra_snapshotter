@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import argparse
+import subprocess
 
 from cass_functions import (_SYSTEM_KEYSPACES, cassandra_query, check_host,
                             get_data_dir, get_keyspaces, get_rpc_address,
@@ -10,10 +11,11 @@ from cass_functions import (_SYSTEM_KEYSPACES, cassandra_query, check_host,
 def data_cleaner(host, backups=False):
     # This fuction finds inactive data directories and removes them
     # This includes unused keyspace directories and table directories
+    # This will also remove snapshot files in the data directories
 
     if check_host(host) != 0:
         raise Exception('Invalid host parameter')
-    keyspaces = get_keyspaces(host)
+    keyspaces = get_keyspaces(host, system=True) # avoid system keyspaces
     structure = get_dir_structure(host, keyspaces)
     cass_data_dir = get_data_dir()
 
@@ -45,6 +47,9 @@ def data_cleaner(host, backups=False):
                 print('Removing old backup db files')
                 for d in table_dirs:
                     clean_directory(cass_data_dir + '/' + keyspace + '/' + d + '/backups')
+
+    print('\nClearing old snapshots . . .')
+    subprocess.call(['nodetool', 'clearsnapshot'])
 
 
 def clean_directory(table_directory):
