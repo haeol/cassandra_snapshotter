@@ -38,7 +38,7 @@
     delegate_to: "{{ play_hosts[0] }}"
     ignore_errors: yes
 
-  - name: Write schema output to file
+  - name: Write schema.py output to file
     local_action: >
       copy
       content="{{ schema_output.stdout }}"
@@ -71,7 +71,7 @@
     register: output
     ignore_errors: yes
 
-  - name: Writing output to file
+  - name: Writing snapshotter output to file
     local_action: >
       copy
       content="{{ output.stdout }}"

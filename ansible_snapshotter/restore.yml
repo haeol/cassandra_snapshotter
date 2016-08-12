@@ -30,13 +30,6 @@
     become: true
     when: pyyaml.rc != 0
 
-    # TODO hard reset cassandra
-    # TODO run destroy schema on one machine
-    # destroy all old files in all machines
-    # create schema in one machine
-    # wait for sync
-    # load buckets in all machines
-
   - name: Run destroy schema on one machine
     command: "python {{ host_snapshotter_directory }}/destroy.py"
     run_once: true
@@ -47,7 +40,7 @@
     local_action: >
       copy
       content="{{ destroy_output.stdout }}"
-      dest="{{ playbook_dir }}/output_logs/output_destroy-{{ inventory_hostname }}.txt"
+      dest="{{ playbook_dir }}/output_logs/destroy-{{ inventory_hostname }}.txt"
       force=yes
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
@@ -56,21 +49,21 @@
     command: "python {{ host_snapshotter_directory }}/cleaner.py"
     register: cleaner_output
 
-  - name: Writing output to file
+  - name: Writing cleaner.py output to file
     local_action: >
       copy
       content="{{ cleaner_output.stdout }}"
-      dest="{{ playbook_dir }}/output_logs/cleaner_output-{{ inventory_hostname }}.txt"
+      dest="{{ playbook_dir }}/output_logs/cleaner-{{ inventory_hostname }}.txt"
       force=yes
 
   - name: Clear .snapshots folder in nodes
     file:
-      path: "{{ host_snapshotter_directory }}/.temp"
+      path: "{{ host_snapshotter_directory }}/.snapshots"
       state: absent
 
   - name: Create .snapshots folder in nodes if did not exist
     file:
-      path: "{{ host_snapshotter_directory }}/.temp"
+      path: "{{ host_snapshotter_directory }}/.snapshots"
       state: directory
 
   - name: Clear .temp folder in nodes
@@ -90,8 +83,6 @@
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
 
-  - pause:
-
   - name: Restore schema in one machine
     command: "python {{ host_snapshotter_directory }}/{{ load_schema_command }}"
     run_once: true
@@ -103,44 +94,13 @@
       dest: "{{ host_snapshotter_directory }}/.snapshots"
 
   - name: Load snapshot files in all machines
-    command: "python {{ host_snapshotter_directory }}/{{ restore_command}} -h {{ play_hosts }}"
+    command: "python {{ host_snapshotter_directory }}/{{ restore_command }} --nodes {{ play_hosts | join(' ') }}"
+    register: restore_output
+    ignore_errors: yes
 
-
-#  - name: Restore schema 
-#
-#  - name: Fetch save_schema from machine
-#    fetch:
-#      src: "{{ host_snapshotter_directory }}/.snapshots/{{ item }}"
-#      dest: "{{ save_snapshot_directory }}"
-#      flat: yes
-#      fail_on_missing: yes
-#    with_items:
-#      - "ring_info.txt"
-#      - "schemas.zip"
-#    run_once: true
-#    delegate_to: "{{ play_hosts[0] }}"
-#
-#
-#  - name: Run snapshotter on all nodes
-#    command: "python {{ host_snapshotter_directory }}/snapshotter.py"
-#    register: output
-#    ignore_errors: yes
-#
-#  - name: Writing output to file
-#    local_action: >
-#      copy
-#      content="{{ output.stdout }}"
-#      dest="{{ playbook_dir }}/output_logs/output-{{ inventory_hostname }}.txt"
-#      force=yes
-#
-#  - fail:
-#      msg: "Error in running snapshotter, output located in ./output_logs/{{ inventory_hostname }}.txt"
-#    when: output.rc != 0
-#
-#  - name: Retrieve node snapshots
-#    fetch:
-#      src: "{{ host_snapshotter_directory }}/.snapshots/{{ inventory_hostname }}.zip"
-#      dest: "{{ save_snapshot_directory }}"
-#      fail_on_missing: yes
-#      flat: yes
-#
+  - name: Writing restore.py output to file
+    local_action: >
+      copy
+      content="{{ restore_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/restore-{{ inventory_hostname }}.txt"
+      force=yes
