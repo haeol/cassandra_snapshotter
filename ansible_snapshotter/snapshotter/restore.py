@@ -6,11 +6,7 @@ import shutil
 import time
 import zipfile
 
-from cass_functions import (cassandra_query, get_data_dir, get_keyspaces,
-                            get_rpc_address, get_table_directories,
-                            get_dir_structure)
-from cleaner import data_cleaner
-
+from cass_functions import get_rpc_address
 
 def parse_cmd():
 

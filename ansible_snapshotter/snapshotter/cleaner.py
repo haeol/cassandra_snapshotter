@@ -1,12 +1,9 @@
 import os
-import sys
 import shutil
-import argparse
 import subprocess
 
-from cass_functions import (_SYSTEM_KEYSPACES, cassandra_query, check_host,
-                            get_data_dir, get_keyspaces, get_rpc_address,
-                            get_table_directories, get_dir_structure)
+from cass_functions import (get_data_dir, get_keyspaces, get_rpc_address,
+                            get_dir_structure, _check_host, SYSTEM_KEYSPACES)
 
 def data_cleaner(host, backups=False):
     # This fuction finds inactive data directories and removes them

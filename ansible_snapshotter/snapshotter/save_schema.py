@@ -3,10 +3,8 @@ import os
 import sys                                                                       
 import subprocess                                                                
 import shutil                                                                    
-import zipfile                                                                   
                                                                                  
-from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,      
-                            get_rpc_address, cassandra_query)  
+from cass_functions import (get_keyspaces, get_rpc_address)  
 
 def parse_cmd():
 

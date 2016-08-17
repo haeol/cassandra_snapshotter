@@ -1,14 +1,8 @@
-import os
 import sys
 import argparse
-import subprocess
-import shutil
-import datetime
-import time
 import zipfile
 
-from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
-                            get_rpc_address, cassandra_query)
+from cass_functions import (get_rpc_address, cassandra_query)
 
 def parse_cmd():
 

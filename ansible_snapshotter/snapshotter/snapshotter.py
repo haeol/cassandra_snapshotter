@@ -3,14 +3,10 @@ import sys
 import argparse
 import subprocess
 import shutil
-import datetime
 import time
-import zipfile
 
 from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
                             get_rpc_address, cassandra_query, check_host)
-
-# nodetool only works with localhost, cqlsh only works with the node's ip
 
 def parse_cmd():
 
@@ -24,10 +20,6 @@ def parse_cmd():
                         required=False,
                         nargs='+',
                         help='Enter table(s) corresponding to a single keyspace'
-    )
-    parser.add_argument('-t', '--title', '--tag', '--name',
-                        required=False,
-                        help='Enter title/name for snapshot'
     )
     return parser.parse_args()
 
@@ -44,7 +36,8 @@ def run_snapshot(title, keyspace=None, table=None):
     subprocess.call(cmd.split())
 
 
-def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
+def snapshot(keyspace_arg=None, table_arg=None):
+
     # nodetool can only run localhost and cqlsh can only run on host argument
     # clear snapshot in default snapshot directory
     host = get_rpc_address()
@@ -54,12 +47,10 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     if check_host(host) != 0:
         print('ERROR: Invalid host, check rpc_address in this node\'s yaml file')
         exit(1)
-        #raise Exception('Invalid host, check rpc_address in this node\'s yaml file')
     keyspaces = get_keyspaces(host) # set of keyspaces
     if len(keyspaces) == 0: # edge case
         print('ERROR: No keyspaces found')
         exit(1)
-        #raise Exception('No keyspaces to snapshot.')
 
     # timestamp name in remote storage, all snapshot names by rpc_address
 
@@ -69,7 +60,6 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
             if ks not in keyspaces:
                 print('ERROR: Keyspaces "%s" not found.' % ks)
                 exit(1)
-                #raise Exception('Keyspace "%s" not found.' % ks)
         else:
             keyspaces = set(keyspace_arg)
     else:
@@ -81,13 +71,11 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
         if not keyspace_arg or len(keyspace_arg) != 1:
             print('ERROR: Only one keyspace can be specified with table arg')
             exit(1)
-            #raise Exception('Only one keyspace can be specified with table arg')
         ks = next(iter(keyspaces)) # retrieve only element in set
         for tb in table_arg:
             if tb not in structure[ks]:
                 print('ERROR: Table "%s" not found in keyspace "%s"' % (tb, ks))
                 exit(1)
-                #raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
         else:
             tables = set(table_arg)
     else:
@@ -107,7 +95,6 @@ def snapshot(title_arg=None, keyspace_arg=None, table_arg=None):
     if os.path.exists(save_path):
         print('ERROR: Snapshot save path conflict')
         exit(1)
-        #raise Exception('Error: Snapshot save path conflict')
 
     print('Saving snapshot into %s . . .' % save_path)
     print('Producing snapshots . . .')
@@ -148,7 +135,7 @@ if __name__ == '__main__':
     cmds = parse_cmd()
 
     start = time.time()
-    snapshot(cmds.title, cmds.keyspace, cmds.table)
+    snapshot(cmds.keyspace, cmds.table)
     end = time.time()
 
     print('Elapsed time: %s' % (end - start))
