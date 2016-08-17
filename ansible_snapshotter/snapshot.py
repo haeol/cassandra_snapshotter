@@ -20,7 +20,7 @@ def parse_cmd():
     )
     parser.add_argument('-n', '--nodes', '--hosts',
                         required=False,
-                        help='Enter the host group from the inventory'
+                        help='Enter the host group from the Ansible inventory'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
@@ -125,9 +125,11 @@ def ansible_snapshot(cmds):
     else:
         zip_dir(temp_path + '/' + title, save_path, title)
         if cmds.s3:
-            file_size = os.path.getsize(save_path + '/' + title + '.zip')
+
             options = set(['y', 'Y', 'n', 'N'])
             confirm = ''
+            
+            file_size = os.path.getsize(save_path + '/' + title + '.zip')
             while confirm not in options:
                 confirm = raw_input('Snapshot size is %i bytes. Upload? [y/n] '
                                    % file_size)
@@ -135,7 +137,7 @@ def ansible_snapshot(cmds):
                 print('Uploading to s3 . . .')
                 key = 'cassandra-snapshot-' + title
                 upload = True
-                if key in [str(obj.key) for obj in s3.objects.all()]:
+                if key in [obj.key for obj in s3.objects.all()]:
                     confirm = ''
                     while confirm not in options:
                         confirm = raw_input('"%s" already exists in the S3 bucket. Overwrite? [y/n] '

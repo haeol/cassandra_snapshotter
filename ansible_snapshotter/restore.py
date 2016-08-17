@@ -16,7 +16,7 @@ def parse_cmd():
     )
     parser.add_argument('-n', '--nodes', '--hosts',
                         required=False,
-                        help='Enter the host IPs'
+                        help='Enter the host group from the Ansible inventory'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
@@ -33,11 +33,14 @@ def parse_cmd():
                         action='store_true',
                         help='Reset the snapshotter files in the nodes'
     )
+    # TODO
+    '''
     parser.add_argument('--hard-reset',
                         required=False,
                         action='store_true',
                         help='Hard reset Cassandra on all nodes, then restore'
     )
+    '''
     parser.add_argument('--s3',
                         required=False,
                         nargs='?',
