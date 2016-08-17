@@ -11,11 +11,11 @@ def parse_cmd():
     parser = argparse.ArgumentParser(description='Ansible Cassandra Restorer')
     parser.add_argument('-d', '--path',
                         type=check_file,
-                        required=True,
+                        required=False,
                         help='Specify a path to the snapshot zip file'
     )
     parser.add_argument('-n', '--nodes', '--hosts',
-                        required=True,
+                        required=False,
                         help='Enter the host IPs'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
@@ -33,6 +33,17 @@ def parse_cmd():
                         action='store_true',
                         help='Reset the snapshotter files in the nodes'
     )
+    parser.add_argument('--hard-reset',
+                        required=False,
+                        action='store_true',
+                        help='Hard reset Cassandra on all nodes, then restore'
+    )
+    parser.add_argument('--s3',
+                        required=False,
+                        nargs='?',
+                        const=True,
+                        help='Specify an s3 object key, or search S3 bucket for a snapshot'
+    )
     return parser.parse_args()
 
 
@@ -49,35 +60,9 @@ def check_file(f):
         raise argparse.ArgumentTypeError('File is not readable')
 
 
-def schema_parser(path):
+def get_zipped_schema(path):
 
-    archive = zipfile.ZipFile(path + '/schemas.zip', 'r')
-    schema = archive.read('schema.cql')
-
-
-def ansible_restore(cmds):
-    
-    if cmds.path:
-        zip_path = cmds.path
-    else:
-        # option to select from snapshots based on date last modified
-        raise Exception('No file specified.')
-
-    # prepare working directories
-    if make_dir(sys.path[0] + '/output_logs'):
-        clean_dir(sys.path[0] + '/output_logs')
-
-    temp_path = sys.path[0] + '/.temp'
-    if make_dir(temp_path):
-        clean_dir(temp_path)
-
-    # unzip 
-    print('Unzipping snapshot file')
-    z = zipfile.ZipFile(zip_path, 'r')
-    z.extractall(temp_path)
-
-    # check args
-    archive = zipfile.ZipFile(temp_path + '/schemas.zip', 'r')
+    archive = zipfile.ZipFile(path, 'r')
     schema_cql = archive.read('schema.cql')
 
     matcher = 'CREATE TABLE (\w{1,})\.(\w{1,})'
@@ -90,12 +75,75 @@ def ansible_restore(cmds):
             schema[ks].add(tb)
         else:
             schema[ks] = set([tb])
+    return schema
 
+
+def ansible_restore(cmds):
+
+    if not (bool(cmds.path) ^ bool(cmds.s3)):
+        raise Exception('Only one of --path or --s3 must be specified') 
+
+    if not cmds.nodes:
+        config = ConfigParser()
+        if len(config.read('config.ini')) == 0:
+            raise Exception('ERROR: Cannot find config.ini in script directory')
+        nodes = config.get('cassandra-info', 'hosts')
+        if not nodes:
+            raise Exception('Hosts argument in config.ini not specified')
+    else:
+        nodes = cmds.nodes
+
+    # prepare working directories
+    print('Preparing ./output_logs')
+    if make_dir(sys.path[0] + '/output_logs'):
+        clean_dir(sys.path[0] + '/output_logs')
+    print('Preparing ./.temp')
+    temp_path = sys.path[0] + '/.temp'
+    if make_dir(temp_path):
+        clean_dir(temp_path)
+    
+    if cmds.path:
+        zip_path = cmds.path
+    elif cmds.s3:
+
+        s3 = s3_bucket()
+        s3_snapshots = set(s3_list_snapshots(s3))
+
+        if cmds.s3 == True: # not a string parameter
+            if len(s3_snapshots) == 0:
+                print('No snapshots found in s3')
+                exit(0)
+            # search 
+            # TODO refine this process to select by index, list date ss made
+            print('\nSnapshots found:')
+            for snap in s3_snapshots:
+                print(snap)
+            choice = ''
+            while choice not in s3_snapshots:
+                choice = raw_input('Enter snapshot: ')
+            s3_key = choice
+        else:
+            if cmds.s3 not in s3_snapshots:
+                raise Exception('S3 Snapshot not found')
+            s3_key = cmds.s3
+
+        s3.download_file(s3_key, temp_path + '/temp.zip') 
+        zip_path = temp_path + '/temp.zip'
+    else:
+        raise Exception('No file specified.')
+
+    # unzip 
+    print('Unzipping snapshot file')
+    z = zipfile.ZipFile(zip_path, 'r')
+    z.extractall(temp_path)
+
+    # check schema specification args
     print('Checking arguments . . .')
     restore_command = 'restore.py '
     load_schema_command = 'load_schema.py '
     if cmds.keyspace:
 
+        schema = get_zipped_schema(temp_path + '/schemas.zip')
         for keyspace in cmds.keyspace:
             if keyspace not in schema.keys():
                 raise Exception('Keyspace "%s" not in snapshot schema' % keyspace)
@@ -120,7 +168,7 @@ def ansible_restore(cmds):
         raise Exception('ERROR: Keyspace must be specified with tables')
 
     playbook_args = {
-        'nodes': cmds.nodes,
+        'nodes': nodes,
         'restore_command' : restore_command,
         'load_schema_command' : load_schema_command,
         'reload' : cmds.reload

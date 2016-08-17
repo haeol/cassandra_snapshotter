@@ -15,11 +15,11 @@ def parse_cmd():
     parser = argparse.ArgumentParser(description='Ansible Cassandra Snapshotter')
     parser.add_argument('-d', '--path',
                         type=check_dir,
-                        required=False,
+                        required=True,
                         help='Specify a path to the snapshot zip file'
     )
     parser.add_argument('-n', '--nodes', '--hosts',
-                        required=True,
+                        required=False,
                         help='Enter the host group from the inventory'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
@@ -52,26 +52,24 @@ def parse_cmd():
 def ansible_snapshot(cmds):
 
     # set title of snapshot file
+    timestamp = str(time.time()).split('.')[0]
     if cmds.title:
         title = cmds.title
     else:
-        title = str(time.time()).split('.')[0]
+        title = timestamp
 
-    if cmds.s3:
+    if not cmds.nodes:
         config = ConfigParser()
         if len(config.read('config.ini')) == 0:
             raise Exception('ERROR: Cannot find config.ini in script directory')
-        bucket = config.get('s3-aws-info', 'bucket')
-        region = config.get('s3-aws-info', 'region')
-        account = config.get('s3-aws-info', 'account')
-        password = config.get('s3-aws-info', 'password')
-        if not(bucket and region and account and password):
-            raise Exception('AWS arguments in config.ini not specified')
-        try:
-            s3 = s3_bucket(account, password, region, bucket)
-        except ValueError as e:
-            print('ERROR: Invalid config.ini options')
-            raise e
+        nodes = config.get('cassandra-info', 'hosts')
+        if not nodes:
+            raise Exception('Hosts argument in config.ini not specified')
+    else:
+        nodes = cmds.nodes
+
+    if cmds.s3:
+        s3 = s3_bucket() # checks config.ini args
 
     # path to save snapshot in
     if cmds.path:
@@ -111,7 +109,7 @@ def ansible_snapshot(cmds):
         raise Exception('ERROR: Keyspace must be specified with tables')
 
     playbook_args = {
-        'nodes' : cmds.nodes,
+        'nodes' : nodes,
         'snapshotter_command' : snapshotter_command,
         'save_schema_command' : save_schema_command,
         'path' : temp_path + '/' + title,
@@ -131,13 +129,25 @@ def ansible_snapshot(cmds):
             options = set(['y', 'Y', 'n', 'N'])
             confirm = ''
             while confirm not in options:
-                confirm = str(raw_input('Snapshot size is %i bytes. Upload? [y/n] '
-                                         % file_size))
+                confirm = raw_input('Snapshot size is %i bytes. Upload? [y/n] '
+                                   % file_size)
             if confirm.lower() == 'y':
                 print('Uploading to s3 . . .')
                 key = 'cassandra-snapshot-' + title
-                s3.upload_file(save_path + '/' + title + '.zip', key)
-                print('Uploaded to bucket "%s" with key "%s"' % (bucket, key))
+                upload = True
+                if key in [str(obj.key) for obj in s3.objects.all()]:
+                    confirm = ''
+                    while confirm not in options:
+                        confirm = raw_input('"%s" already exists in the S3 bucket. Overwrite? [y/n] '
+                                            % key)
+                    if confirm.lower() == 'n':
+                        upload = False
+                        print('Skipping upload to s3 . . .')
+
+                if upload:
+                    s3.upload_file(save_path + '/' + title + '.zip', key)
+                    print('Uploaded with key "%s"' % key)
+
         print('Process complete.')
         print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
         print('Snapshot zip saved in %s' % save_path)

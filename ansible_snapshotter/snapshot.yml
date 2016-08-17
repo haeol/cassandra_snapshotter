@@ -42,7 +42,7 @@
     local_action: >
       copy
       content="{{ schema_output.stdout }}"
-      dest="{{ playbook_dir }}/output_logs/output_schema-{{ inventory_hostname }}.txt"
+      dest="{{ playbook_dir }}/output_logs/schema-{{ inventory_hostname }}.txt"
       force=yes
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
@@ -50,7 +50,7 @@
   - fail:
       msg: > 
         "Error in running save_schema, script output located in"
-        "./output_logs/output_schema-{{ inventory_hostname }}.txt"
+        "./output_logs/schema-{{ inventory_hostname }}.txt"
     when: schema_output.rc != 0
 
   - name: Fetch save_schema from machine
@@ -68,21 +68,21 @@
 
   - name: Run snapshotter on all nodes
     command: "python {{ host_snapshotter_directory }}/{{ snapshotter_command }}"
-    register: output
+    register: snapshot_output
     ignore_errors: yes
 
-  - name: Writing snapshotter output to file
+  - name: Writing snapshotter.py output to file
     local_action: >
       copy
-      content="{{ output.stdout }}"
-      dest="{{ playbook_dir }}/output_logs/output-{{ inventory_hostname }}.txt"
+      content="{{ snapshot_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/snapshot-{{ inventory_hostname }}.txt"
       force=yes
 
   - fail:
       msg: >
         "Error in running snapshotter, script output located in"
-        "./output_logs/{{ inventory_hostname }}.txt"
-    when: output.rc != 0
+        "./output_logs/snapshot-{{ inventory_hostname }}.txt"
+    when: snapshot_output.rc != 0
 
   - name: Retrieve node snapshots
     fetch:

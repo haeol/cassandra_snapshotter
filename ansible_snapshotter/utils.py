@@ -4,7 +4,12 @@ import subprocess
 import json
 import shutil
 import zipfile
-import ConfigParser
+import re
+
+try:
+    from ConfigParser import ConfigParser
+except:
+    from configparser import ConfigParser # python3
 
 import boto3
 import botocore
@@ -26,7 +31,7 @@ def run_playbook(play, args):
     return subprocess.call(cmd) # 0 success 1 fail
 
 
-def s3_bucket(s3_access_key, s3_secret_key, s3_region, s3_bucket):
+def get_s3_bucket(s3_access_key, s3_secret_key, s3_region, s3_bucket):
 
     # bucket.upload_file('path', 'key')
     # bucket.download_file('key', 'path')
@@ -49,6 +54,33 @@ def s3_bucket(s3_access_key, s3_secret_key, s3_region, s3_bucket):
 
     return bucket
 
+
+def s3_bucket():
+    
+    config = ConfigParser()
+    if len(config.read('config.ini')) == 0:
+        raise Exception('ERROR: Cannot find config.ini in script directory')
+    bucket = config.get('s3-aws-info', 'bucket')
+    region = config.get('s3-aws-info', 'region')
+    account = config.get('s3-aws-info', 'account')
+    password = config.get('s3-aws-info', 'password')
+    if not(bucket and region and account and password):
+        raise Exception('AWS arguments in config.ini not specified')
+    try:
+        return get_s3_bucket(account, password, region, bucket)
+    except ValueError as e:
+        print('ERROR: Invalid config.ini options')
+        raise e
+
+
+def s3_list_snapshots(s3_bucket):
+    options = []
+    for obj in s3_bucket.objects.all():
+        match = re.match('cassandra-snapshot-[^\s]*', obj.key)
+        if match:
+            options.append(obj.key)
+    return options
+            
 
 def s3_delete_object(s3_bucket, key):
     

@@ -85,8 +85,25 @@
 
   - name: Restore schema in one machine
     command: "python {{ host_snapshotter_directory }}/{{ load_schema_command }}"
+    register: schema_output
     run_once: true
     delegate_to: "{{ play_hosts[0] }}"
+    ignore_errors: yes
+
+  - name: Writing load_schema.py output to file
+    local_action: >
+      copy
+      content="{{ schema_output.stdout }}"
+      dest="{{ playbook_dir }}/output_logs/schema-{{ inventory_hostname }}.txt"
+      force=yes
+    run_once: true
+    delegate_to: "{{ play_hosts[0] }}"
+
+  - fail:
+      msg: >
+        "Error in running load_schema.py, script output located in"
+        "./output_logs/schema-{{ inventory_hostname }}.txt"
+    when: schema_output.rc != 0
 
   - name: Copy snapshot files to respective nodes
     copy:
@@ -104,3 +121,9 @@
       content="{{ restore_output.stdout }}"
       dest="{{ playbook_dir }}/output_logs/restore-{{ inventory_hostname }}.txt"
       force=yes
+
+  - fail:
+      msg: >
+        "Error in running restore.py, script output located in"
+        "./output_logs/restore-{{ inventory_hostname }}.txt"
+    when: restore_output.rc != 0
