@@ -10,7 +10,7 @@ from cass_functions import (get_data_dir, get_keyspaces, get_dir_structure,
 
 def parse_cmd():
 
-    parser = argparse.ArgumentParser(description='Snapshotter')
+    parser = argparse.ArgumentParser(description='Local Snapshotter')
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
                         nargs='+',
@@ -39,23 +39,20 @@ def run_snapshot(title, keyspace=None, table=None):
 def snapshot(keyspace_arg=None, table_arg=None):
 
     # nodetool can only run localhost and cqlsh can only run on host argument
-    # clear snapshot in default snapshot directory
     host = get_rpc_address()
-    title = host
+    title = host # all local snapshots are named by its ip address or rpc_address
     save_root = sys.path[0] + '/.snapshots/'
 
     if check_host(host) != 0:
         print('ERROR: Invalid host, check rpc_address in this node\'s yaml file')
         exit(1)
-    keyspaces = get_keyspaces(host) # set of keyspaces
+    keyspaces = get_keyspaces(host) # set; retrieves through cqlsh
     if len(keyspaces) == 0: # edge case
         print('ERROR: No keyspaces found')
         exit(1)
 
-    # timestamp name in remote storage, all snapshot names by rpc_address
-
     print('Checking keyspace arguments . . .')
-    if keyspace_arg: # checks if keyspace argument exists in database
+    if keyspace_arg:
         for ks in keyspace_arg:
             if ks not in keyspaces:
                 print('ERROR: Keyspaces "%s" not found.' % ks)

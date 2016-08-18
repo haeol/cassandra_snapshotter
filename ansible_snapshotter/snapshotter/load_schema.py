@@ -17,12 +17,14 @@ def parse_cmd():
 
 def _load(host, load_path):
     
+    # The load path is the location of the .cql file which contains the schema
     with open(load_path, 'r') as f:
         cassandra_query(host, f.read())
 
 
 def load_schema(keyspace = None):
 
+    # Only loads schemas insode ./.temp
     temp_path = sys.path[0] + '/.temp'
     host = get_rpc_address()
 

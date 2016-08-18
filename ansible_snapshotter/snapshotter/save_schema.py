@@ -19,6 +19,8 @@ def parse_cmd():
 
 def write_ring_info(save_path):
     
+    # Ring info is not always needed, but is useful for restoring into a new
+    # cluster where the ring tokens are vital
     with open(save_path + '/ring_info.txt', 'w') as f:
         nodetool = subprocess.Popen(['nodetool', 'ring'], stdout=f)
         nodetool.wait()
@@ -26,6 +28,7 @@ def write_ring_info(save_path):
 
 def write_schema(host, save_path, keyspace=None):
 
+    # Writes the Cassandra schema to a .cql file and stores it in the save_path
     if keyspace:
         save_path = save_path + '/' + keyspace
         filename = keyspace + '_schema.cql'
@@ -57,7 +60,6 @@ def save_schema(keyspace_arg=None):
             if ks not in keyspaces:
                 print('ERROR: Invalid keyspace argument')
                 exit(1)
-                #raise Exception('Invalid keyspace argument')
 
     print('Saving schema . . .')
     print_save_path = write_schema(host, save_path)

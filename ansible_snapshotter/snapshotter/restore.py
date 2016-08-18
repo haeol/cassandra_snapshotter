@@ -10,7 +10,7 @@ from cass_functions import get_rpc_address
 
 def parse_cmd():
 
-    parser = argparse.ArgumentParser(description='Snapshot Restorer')
+    parser = argparse.ArgumentParser(description='Local Snapshot Restorer')
     parser.add_argument('-n', '--nodes', '--hosts',
                         required=True,
                         nargs='+',
@@ -31,6 +31,7 @@ def parse_cmd():
 
 def clean_dir(path):
 
+    # removes all files and directories from a directory
     for f in os.listdir(path):
         if os.path.isdir(path + '/' + f):
             shutil.rmtree(path + '/' + f)
@@ -40,6 +41,7 @@ def clean_dir(path):
 
 def make_dir(path):
 
+    # creates a directory if it does not exist
     exists = False
     if not os.path.isdir(path):
         os.makedirs(path)
@@ -63,9 +65,29 @@ def restore(hosts, keyspace_arg = None, table_arg = None):
     zipf.extractall(temp_path)
     zipf.close()
 
-    for ks in os.listdir(temp_path):
+    print('Checking keyspace and table arguments . . .')
+    keyspaces = os.listdir(temp_path)
+    if keyspace_arg:
+        for ks in keyspace_arg:
+            if ks not in keyspaces:
+                print('ERROR: Keyspace arg not in snapshot file')
+                exit(1)
+            if table_arg:
+                for tb in table_arg:
+                    if tb not in os.listdir(temp_path + '/' + ks):
+                        print('ERROR: Table arg not in snapshot file')
+                        exit(1)
+                else:
+                    tables = table_arg
+        else:
+            keyspaces = keyspace_arg
+
+    print('Loading snapshot data . . .')
+    for ks in keyspaces:
+        if not table_arg:
+            tables = os.listdir(temp_path + '/' + ks)
         print('Loading keyspace: %s' % ks)
-        for tb in os.listdir(temp_path + '/' + ks):
+        for tb in tables:
             print('\tLoading table: %s' % tb)
             tb_dir = temp_path + '/' + ks + '/' + tb
             subprocess.call(['/bin/sstableloader', '-d', ','.join(hosts), tb_dir])

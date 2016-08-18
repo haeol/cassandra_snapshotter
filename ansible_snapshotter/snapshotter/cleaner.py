@@ -3,7 +3,7 @@ import shutil
 import subprocess
 
 from cass_functions import (get_data_dir, get_keyspaces, get_rpc_address,
-                            get_dir_structure, _check_host, SYSTEM_KEYSPACES)
+                            get_dir_structure, check_host, _SYSTEM_KEYSPACES)
 
 def data_cleaner(host, backups=False):
     # This fuction finds inactive data directories and removes them
@@ -50,7 +50,7 @@ def data_cleaner(host, backups=False):
 
 
 def clean_directory(table_directory):
-    # TODO does incremental backups work with this?
+
     for f in os.listdir(table_directory):
         if os.isfile(f):
             os.remove(table_directory + '/' + f)

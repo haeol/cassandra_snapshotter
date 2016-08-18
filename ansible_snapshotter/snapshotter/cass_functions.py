@@ -12,32 +12,10 @@ _SYSTEM_KEYSPACES = set(['system_schema',
 _YAML_LOCATIONS = ['/etc/cassandra/conf/', # package install on centos
                    '/etc/cassandra/',      # ubuntu package install
                    '/etc/dse/cassandra/'   # datastax enterprise package
-                  ] #TODO tarball install needs install location
+                  ] #TODO user input yaml locations, other locations
 
-def cassandra_query(host, query, test=False):
-    # This function takes in a cassandra query and returns the output
-
-    if type(query) is str:
-        query = ['echo', query]
-    elif type(query) is not list:
-        raise Exception('Query not recognized')
-
-    query_process = subprocess.Popen(query, stdout=subprocess.PIPE)
-    cqlsh = subprocess.Popen(('/bin/cqlsh', host),
-                             stdin=query_process.stdout,
-                             stdout=subprocess.PIPE)
-    query_process.stdout.close()
-    output = cqlsh.communicate()[0]
-    query_process.wait()
-    if test:
-        output = cqlsh.returncode
-    return output
-
-
-def check_host(host):
-    return cassandra_query(host, 'exit', test=True)
     
-
+# Cassandra YAML related functions
 def get_yaml_var(var):
     # This function uses cassandra.yaml to find a specific variable in it
 
@@ -60,6 +38,31 @@ def get_data_dir():
 
 def get_rpc_address():
     return get_yaml_var('rpc_address')
+
+
+# Cassandra Query Related Function
+def cassandra_query(host, query, test=False):
+    # This function takes in a cassandra query and returns the output
+
+    if type(query) is str:
+        query = ['echo', query]
+    elif type(query) is not list:
+        raise Exception('Query not recognized')
+
+    query_process = subprocess.Popen(query, stdout=subprocess.PIPE)
+    cqlsh = subprocess.Popen(('/bin/cqlsh', host),
+                             stdin=query_process.stdout,
+                             stdout=subprocess.PIPE)
+    query_process.stdout.close()
+    output = cqlsh.communicate()[0]
+    query_process.wait()
+    if test:
+        output = cqlsh.returncode
+    return output
+
+
+def check_host(host):
+    return cassandra_query(host, 'exit', test=True)
 
 
 def get_keyspaces(host, system=False):
