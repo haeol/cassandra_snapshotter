@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     cmds = parse_cmd()
     
-    start = time.time()
+    start_time = time.time()
     if cmds.stage:
 
         if cmds.stage == 'shutdown':
