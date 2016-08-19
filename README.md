@@ -26,7 +26,7 @@ python install.py -n [nodes] # or the host group from the Ansible inventory
 
 ## Usage
 snapshotter.py
-``` python
+``` bash
 python snapshotter.py -d/--path          # save path
                       -n/--nodes/--hosts # host group from Ansible or host ip-addresses
                       -ks/--keyspace     # specify a keyspace (optional)
