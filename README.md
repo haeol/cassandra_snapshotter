@@ -45,6 +45,17 @@ python restore.py     -d/--path          # snapshot zip file
                       --s3               # retrieve from S3 with the config.ini settings; can specify key (arg) or search (flag)
                       --reload           # reinstall the scripts on the nodes (flag)
 ```
+config.ini
+``` bash
+[s3-aws-info]
+bucket =    # mybucket
+region =    # us-west-1
+account =   # account id
+password =  # aws secret key
+
+[cassandra-info]
+hosts =     # name of group in ansible inventory or space/comma separated IPs
+```
 
 ## How it works
 snapshot.py does the following:
