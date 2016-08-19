@@ -1,0 +1,14 @@
+Incremental backups
+ - This can be altered to support incremental backups, but it requires a metadata
+   file to keep this option consistent
+
+Hard reset
+ - Currently, there is a hard_reset.py script but the hosts that have had this
+   script tested on cannot call 'cassandra' from a remote host. On the host
+   itself, '$ cassandra' works fine as does 'python hard_reset.py'
+
+Scale testing
+ - This has not yet been tested on databases larger than 5MB
+
+S3 Multipart upload
+ - When this scales, multipart uploading will be necessary
