@@ -5,6 +5,6 @@ from setuptools import setup, find_packages
 setup(
     name='cassandra_snapshotter',
     version='0.0.1',
-    install_requires=['pyyaml'],
+    install_requires=['boto3'],
     find_packages=find_packages()
 )

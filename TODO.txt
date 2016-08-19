@@ -12,3 +12,6 @@ Scale testing
 
 S3 Multipart upload
  - When this scales, multipart uploading will be necessary
+
+Ansible Style
+ - Roles is a more structured way to approach Ansible
