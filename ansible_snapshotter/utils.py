@@ -14,6 +14,8 @@ except:
 import boto3
 import botocore
 
+
+# Ansible Functions
 def run_playbook(play, args):
     # pass args as a dict
     
@@ -31,6 +33,7 @@ def run_playbook(play, args):
     return subprocess.call(cmd) # 0 success 1 fail
 
 
+# AWS S3 Functions
 def get_s3_bucket(s3_access_key, s3_secret_key, s3_region, s3_bucket):
 
     # bucket.upload_file('path', 'key')
@@ -93,15 +96,7 @@ def s3_delete_object(s3_bucket, key):
     )
 
 
-def clean_dir(path):
-
-    for f in os.listdir(path):
-        if os.path.isdir(path + '/' + f):
-            shutil.rmtree(path + '/' + f)
-        else:
-            os.remove(path + '/' + f)
-
-
+# File System Functions
 def check_dir(folder):
 
     if not os.path.isdir(folder):
@@ -110,6 +105,19 @@ def check_dir(folder):
         return folder
     else:
         raise argparse.ArgumentTypeError('Directory is not readable')
+
+
+def check_file(f):
+
+    if not os.path.isfile(f):
+        raise argparse.ArgumentTypeError('File does not exist')
+    if os.access(f, os.R_OK):
+        if zipfile.is_zipfile(f):
+            return f
+        else:
+            raise argparse.ArgumentTypeError('File is not a zip file')
+    else:
+        raise argparse.ArgumentTypeError('File is not readable')
 
 
 def zip_dir(root_path, save_path, title): # use shutil.make_archive in python2.7
@@ -124,11 +132,44 @@ def zip_dir(root_path, save_path, title): # use shutil.make_archive in python2.7
     z.close()
 
 
+def clean_dir(path):
+
+    # removes all files and directories in a directory
+    for f in os.listdir(path):
+        if os.path.isdir(path + '/' + f):
+            shutil.rmtree(path + '/' + f)
+        else:
+            os.remove(path + '/' + f)
+
+
 def make_dir(path):
 
+    # makes a directory if it does not exist
     exists = False
     if not os.path.isdir(path):
         os.makedirs(path)
     else:
         exists = True
     return exists
+
+
+def prepare_dir(path, output=False):
+    
+    # makes a directory if it does not exist, clears it if it does
+    if output:
+        print('Preparing directory: %s' % path)
+    if make_dir(path):
+        clean_dir(path)
+
+
+# Miscellaneous Functions
+def confirm(prompt=None):
+
+    options = set(['y', 'Y', 'n', 'N'])
+    confirm = ''
+    while confirm not in options:
+        confirm = raw_input(prompt)
+    if confirm.lower() == 'y':
+        return True
+    else:
+        return False

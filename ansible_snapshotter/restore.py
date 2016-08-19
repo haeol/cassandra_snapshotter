@@ -3,8 +3,13 @@ import os
 import sys
 import re
 import zipfile
+try:
+    from ConfigParser import ConfigParser
+except:
+    from configparser import ConfigParser # python3
 
-from utils import *
+from utils import (run_playbook, s3_bucket, s3_list_snapshots,
+                   check_file, clean_dir, make_dir, prepare_dir) 
 
 def parse_cmd():
 
@@ -16,7 +21,9 @@ def parse_cmd():
     )
     parser.add_argument('-n', '--nodes', '--hosts',
                         required=False,
-                        help='Enter the host group from the Ansible inventory'
+                        nargs='+',
+                        help='Enter the host group from the Ansible inventory ' +
+                             'or enter the host ip addresses as a space separated list'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
@@ -33,14 +40,11 @@ def parse_cmd():
                         action='store_true',
                         help='Reset the snapshotter files in the nodes'
     )
-    # TODO
-    '''
     parser.add_argument('--hard-reset',
                         required=False,
                         action='store_true',
                         help='Hard reset Cassandra on all nodes, then restore'
     )
-    '''
     parser.add_argument('--s3',
                         required=False,
                         nargs='?',
@@ -48,19 +52,6 @@ def parse_cmd():
                         help='Specify an s3 object key, or search S3 bucket for a snapshot'
     )
     return parser.parse_args()
-
-
-def check_file(f):
-
-    if not os.path.isfile(f):
-        raise argparse.ArgumentTypeError('File does not exist')
-    if os.access(f, os.R_OK):
-        if zipfile.is_zipfile(f):
-            return f
-        else:
-            raise argparse.ArgumentTypeError('File is not a zip file')
-    else:
-        raise argparse.ArgumentTypeError('File is not readable')
 
 
 def get_zipped_schema(path):
@@ -90,46 +81,54 @@ def ansible_restore(cmds):
         config = ConfigParser()
         if len(config.read('config.ini')) == 0:
             raise Exception('ERROR: Cannot find config.ini in script directory')
-        nodes = config.get('cassandra-info', 'hosts')
+        nodes = re.findall('[^,\s\[\]]+', config.get('cassandra-info', 'hosts'))
         if not nodes:
             raise Exception('Hosts argument in config.ini not specified')
     else:
         nodes = cmds.nodes
 
     # prepare working directories
-    print('Preparing ./output_logs')
-    if make_dir(sys.path[0] + '/output_logs'):
-        clean_dir(sys.path[0] + '/output_logs')
-    print('Preparing ./.temp')
     temp_path = sys.path[0] + '/.temp'
-    if make_dir(temp_path):
-        clean_dir(temp_path)
+    prepare_dir(sys.path[0] + '/output_logs', output=True)
+    prepare_dir(temp_path, output=True)
     
     if cmds.path:
         zip_path = cmds.path
     elif cmds.s3:
-
         s3 = s3_bucket()
-        s3_snapshots = set(s3_list_snapshots(s3))
+        s3_snapshots = s3_list_snapshots(s3)
 
         if cmds.s3 == True: # not a string parameter
             if len(s3_snapshots) == 0:
                 print('No snapshots found in s3')
                 exit(0)
-            # search 
-            # TODO refine this process to select by index, list date ss made
-            print('\nSnapshots found:')
-            for snap in s3_snapshots:
-                print(snap)
-            choice = ''
-            while choice not in s3_snapshots:
-                choice = raw_input('Enter snapshot: ')
-            s3_key = choice
-        else:
-            if cmds.s3 not in s3_snapshots:
-                raise Exception('S3 Snapshot not found')
-            s3_key = cmds.s3
 
+            # search 
+            print('\nSnapshots found:')
+            template = '{0:5} | {1:67}'
+            print(template.format('Index', 'Snapshot'))
+            for idx, snap in enumerate(s3_snapshots):
+                # every snapshot starts with cassandra-snapshot- (19 chars)
+                stripped = snap[19:] 
+                print(template.format(idx + 1, stripped))
+            
+            index = 0
+            while index not in range(1, len(s3_snapshots) + 1):
+                try:
+                    index = int(raw_input('Enter snapshot index: '))
+                except ValueError:
+                    continue
+            s3_key = s3_snapshots[index - 1]
+
+        else:
+            s3_key = cmds.s3
+            if not s3_key.startswith('cassandra-snapshot-'):
+                s3_key = 'cassandra-snapshot-' + s3_key
+
+            if s3_key not in s3_snapshots:
+                raise Exception('S3 Snapshot not found')
+
+        print('Retrieving snapshot from S3: %s' % s3_key)
         s3.download_file(s3_key, temp_path + '/temp.zip') 
         zip_path = temp_path + '/temp.zip'
     else:
@@ -149,7 +148,7 @@ def ansible_restore(cmds):
         schema = get_zipped_schema(temp_path + '/schemas.zip')
         for keyspace in cmds.keyspace:
             if keyspace not in schema.keys():
-                raise Exception('Keyspace "%s" not in snapshot schema' % keyspace)
+                raise Exception('ERROR: Keyspace "%s" not in snapshot schema' % keyspace)
 
         keyspace_arg = '-ks ' + ' '.join(cmds.keyspace)
         restore_command += keyspace_arg
@@ -163,7 +162,7 @@ def ansible_restore(cmds):
             ks = cmds.keyspace[0]
             for tb in cmds.table:
                 if tb not in schema[ks]:
-                    raise Exception('Table "%s" not found in keyspace "%s"' % (tb, ks))
+                    raise Exception('ERROR: Table "%s" not found in keyspace "%s"' % (tb, ks))
 
             restore_command += ' -tb ' + ' '.join(cmds.table)
 
@@ -171,16 +170,17 @@ def ansible_restore(cmds):
         raise Exception('ERROR: Keyspace must be specified with tables')
 
     playbook_args = {
-        'nodes': nodes,
+        'nodes': ' '.join(nodes),
         'restore_command' : restore_command,
         'load_schema_command' : load_schema_command,
-        'reload' : cmds.reload
+        'reload' : cmds.reload,
+        'hard_reset' : cmds.hard_reset
     }
     return_code = run_playbook('restore.yml', playbook_args)
     
     if return_code != 0:
         print('ERROR: Ansible script failed to run properly. ' +
-              'If this persists, try --hard-reset.')
+              'If this persists, try --hard-reset. (TODO)') # TODO
     else:
         print('Process complete.')
         print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))

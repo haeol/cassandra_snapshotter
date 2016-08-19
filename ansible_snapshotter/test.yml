@@ -1,0 +1,4 @@
+---
+- hosts: 10.0.15.11
+  tasks:
+  - command: 'python /home/vagrant/ansible_playbook/snapshotter/hard_reset.py -s wait'

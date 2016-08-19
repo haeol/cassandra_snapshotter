@@ -8,19 +8,22 @@ try:
 except:
     from configparser import ConfigParser # python3
 
-from utils import (run_playbook, s3_bucket, clean_dir, make_dir, check_dir, zip_dir)
+from utils import (clean_dir, make_dir, check_dir, zip_dir, prepare_dir,
+                   run_playbook, s3_bucket, confirm)
 
 def parse_cmd():
 
     parser = argparse.ArgumentParser(description='Ansible Cassandra Snapshotter')
     parser.add_argument('-d', '--path',
                         type=check_dir,
-                        required=True,
+                        required=False,
                         help='Specify a path to the snapshot zip file'
     )
     parser.add_argument('-n', '--nodes', '--hosts',
+                        nargs='+',
                         required=False,
-                        help='Enter the host group from the Ansible inventory'
+                        help='Enter the host group from the Ansible inventory ' +
+                             'or enter the host ip addresses as a space separated list'
     )
     parser.add_argument('-k', '-ks', '--keyspace',
                         required=False,
@@ -62,7 +65,7 @@ def ansible_snapshot(cmds):
         config = ConfigParser()
         if len(config.read('config.ini')) == 0:
             raise Exception('ERROR: Cannot find config.ini in script directory')
-        nodes = config.get('cassandra-info', 'hosts')
+        nodes = re.findall('[^,\s\[\]]+', config.get('cassandra-info', 'hosts'))
         if not nodes:
             raise Exception('Hosts argument in config.ini not specified')
     else:
@@ -82,13 +85,10 @@ def ansible_snapshot(cmds):
         raise Exception('%s has already been created' %
                         save_path + '/' + title + '.zip')
 
-    # create working directories
-    if make_dir(sys.path[0] + '/output_logs'):
-        clean_dir(sys.path[0] + '/output_logs')
-
+    # prepare working directories
     temp_path = sys.path[0] + '/.temp'
-    if make_dir(temp_path):
-        clean_dir(temp_path)
+    prepare_dir(sys.path[0] + '/output_logs')
+    prepare_dir(temp_path)
     os.makedirs(temp_path + '/' + title)
 
     # check keyspace and table args
@@ -109,7 +109,7 @@ def ansible_snapshot(cmds):
         raise Exception('ERROR: Keyspace must be specified with tables')
 
     playbook_args = {
-        'nodes' : nodes,
+        'nodes' : ' '.join(nodes),
         'snapshotter_command' : snapshotter_command,
         'save_schema_command' : save_schema_command,
         'path' : temp_path + '/' + title,
@@ -124,31 +124,22 @@ def ansible_snapshot(cmds):
         print('Error running ansible script')
     else:
         zip_dir(temp_path + '/' + title, save_path, title)
-        if cmds.s3:
 
-            options = set(['y', 'Y', 'n', 'N'])
-            confirm = ''
-            
+        if cmds.s3:
+        
             file_size = os.path.getsize(save_path + '/' + title + '.zip')
-            while confirm not in options:
-                confirm = raw_input('Snapshot size is %i bytes. Upload? [y/n] '
-                                   % file_size)
-            if confirm.lower() == 'y':
+            if confirm('Snapshot size is %i bytes. Upload? [y/n] ' % file_size):
                 print('Uploading to s3 . . .')
                 key = 'cassandra-snapshot-' + title
                 upload = True
                 if key in [obj.key for obj in s3.objects.all()]:
-                    confirm = ''
-                    while confirm not in options:
-                        confirm = raw_input('"%s" already exists in the S3 bucket. Overwrite? [y/n] '
-                                            % key)
-                    if confirm.lower() == 'n':
-                        upload = False
-                        print('Skipping upload to s3 . . .')
-
+                    upload = confirm(('"%s" already exists in the S3 bucket.' % key) +
+                                      'Overwrite? [y/n]')
                 if upload:
                     s3.upload_file(save_path + '/' + title + '.zip', key)
                     print('Uploaded with key "%s"' % key)
+                else:
+                    print('Skipping upload to s3 . . .')
 
         print('Process complete.')
         print('Output logs saved in %s' % (sys.path[0] + '/output_logs'))
@@ -159,3 +150,4 @@ if __name__ == '__main__':
 
     cmds = parse_cmd()
     ansible_snapshot(cmds)
+

@@ -2,7 +2,7 @@
 - hosts: "{{ nodes }}"
 
   vars:
-    # extra-vars are nodes, reload
+    # extra-vars are nodes, reload, hard_reset
     host_snapshotter_directory: "~/ansible_playbook/snapshotter"
 
   tasks:
@@ -27,12 +27,33 @@
 
   - name: import error
     pip: name=pyyaml version=3.11
-    become: true
+    become: True
     when: pyyaml.rc != 0
+
+# INFO ON THIS IN TODO.txt
+#  - name: Shutdown and clean Cassandra files
+#    command: "python {{ host_snapshotter_directory }}/hard_reset.py -s shutdown"
+#    register: reset_output1
+#    when: hard_reset
+#    ignore_errors: True
+#
+#  - name: Write stage 1 hard_reset.py output to file
+#    local_action: >
+#      copy
+#      content="{{ reset_output1.stdout }}"
+#      dest="{{ playbook_dir }}/output_logs/hard_reset-{{ inventory_hostname }}.txt"
+#      force=yes
+#    when: hard_reset
+#
+#  - fail:
+#      msg: >
+#        "Error in running hard_reset.py, script output located in"
+#        "./output_logs/reset-{{ inventory_hostname }}.txt"
+#    when: hard_reset and reset_output1.rc != 0
 
   - name: Run destroy schema on one machine
     command: "python {{ host_snapshotter_directory }}/destroy.py"
-    run_once: true
+    run_once: True
     delegate_to: "{{ play_hosts[0] }}"
     register: destroy_output
     
@@ -42,7 +63,7 @@
       content="{{ destroy_output.stdout }}"
       dest="{{ playbook_dir }}/output_logs/destroy-{{ inventory_hostname }}.txt"
       force=yes
-    run_once: true
+    run_once: True
     delegate_to: "{{ play_hosts[0] }}"
 
   - name: Clean all old files in all machines
@@ -80,13 +101,13 @@
     copy:
       src: "{{ playbook_dir }}/.temp/schemas.zip"
       dest: "{{ host_snapshotter_directory }}/.temp"
-    run_once: true
+    run_once: True
     delegate_to: "{{ play_hosts[0] }}"
 
   - name: Restore schema in one machine
     command: "python {{ host_snapshotter_directory }}/{{ load_schema_command }}"
     register: schema_output
-    run_once: true
+    run_once: True
     delegate_to: "{{ play_hosts[0] }}"
     ignore_errors: yes
 
@@ -96,7 +117,7 @@
       content="{{ schema_output.stdout }}"
       dest="{{ playbook_dir }}/output_logs/schema-{{ inventory_hostname }}.txt"
       force=yes
-    run_once: true
+    run_once: True
     delegate_to: "{{ play_hosts[0] }}"
 
   - fail:
