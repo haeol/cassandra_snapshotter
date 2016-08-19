@@ -1,8 +1,3 @@
-# This script is still a work in progress.
-# So far, this script works fine stand alone calling it on each node, but when
-# trying to call this function from a remote host, bash and subprocess cannot
-# identify 'cassandra' as a valid command even though it works.
-
 import argparse
 import os
 import subprocess
@@ -53,11 +48,10 @@ def start():
     startservice = subprocess.Popen(('sudo', 'service', 'cassandra', 'start'))
     startservice.wait()
 
-    print('Starting Cassandra')
-    start_cassandra = subprocess.call(('cassandra'))
+    # process will not continue without calling script with nohup
+    print('Starting Cassandra') 
+    start_cassandra = subprocess.Popen(('/usr/sbin/cassandra'), shell=True)
 
-
-def wait():
     start = time.time()
     current = start
     host = get_rpc_address()
@@ -68,7 +62,7 @@ def wait():
             print('ERROR: Timed out waiting for cassandra to start.' +
                   'Try increasing _TIMEOUT value.')
             exit(1)
-        time.sleep(_SLEEP) 
+        time.sleep(_SLEEP)
 
     print('Hard reset complete')
 
@@ -76,18 +70,16 @@ def wait():
 if __name__ == '__main__':
 
     cmds = parse_cmd()
-
+    
+    start = time.time()
     if cmds.stage:
 
         if cmds.stage == 'shutdown':
             shutdown()
         elif cmds.stage == 'start':
             start()
-        elif cmds.stage == 'wait':
-            wait()
 
     else:
         shutdown()
         start()
-        wait()
-
+    print('Process took %s seconds to complete' % time.time() - start)
