@@ -56,7 +56,7 @@ def start():
     current = start
     host = get_rpc_address()
     while check_host(host) != 0:
-        print('Time elapse: %s' % (current - start))
+        print('Time elapsed waiting for Cassandra: %s' % (current - start))
         current = time.time()
         if current - start > _TIMEOUT:
             print('ERROR: Timed out waiting for cassandra to start.' +
@@ -82,4 +82,4 @@ if __name__ == '__main__':
     else:
         shutdown()
         start()
-    print('Process took %s seconds to complete' % time.time() - start)
+    print('Process took %s seconds to complete' % (time.time() - start_time))
