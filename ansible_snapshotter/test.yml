@@ -1,4 +1,0 @@
-- hosts: dbservers
-  tasks:
-  - name: test
-    shell: '/usr/sbin/cassandra'
